@@ -284,6 +284,14 @@ export default function App() {
     }
   };
 
+  // Click-to-load a specific transaction sample from the list
+  const handleSelectSampleTransaction = (tx) => {
+    if (!tx || !tx.features) return;
+    setTransaction(tx.features);
+    setPresetType(tx.badge_color === 'danger' ? 'fraud' : 'legit');
+    runPrediction(tx.features, selectedModel);
+  };
+
   // Handle Amount Shortcut
   const handleAmountShortcut = (amount) => {
     const updated = { ...transaction, Amount: amount };
