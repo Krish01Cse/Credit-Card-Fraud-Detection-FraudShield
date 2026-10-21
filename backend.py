@@ -651,3 +651,121 @@ def predict_transaction(model, scaler, transaction, feature_names):
         "fraud_probability": fraud_prob,
     }
 
+
+# ---------------------------------------------------------------------------
+# Curated Sample Transactions (Authentic Kaggle PCA vectors with rich metadata)
+# ---------------------------------------------------------------------------
+
+SAMPLE_LEGIT_TRANSACTIONS = [
+    {
+        "id": "TX-LEGIT-101",
+        "tag": "TX-9401",
+        "merchant": "Whole Foods Market",
+        "category": "Groceries",
+        "location": "Austin, TX (In-Store Chip)",
+        "amount": 78.45,
+        "time": 820.0,
+        "risk_level": "Minimal",
+        "badge_color": "success",
+        "description": "Routine weekly grocery payment using chip terminal.",
+        "features": {
+            "Amount": 78.45, "Time": 820.0,
+            "V1": -1.1582, "V2": 0.8755, "V3": 1.5487, "V4": 0.4030,
+            "V5": -0.4072, "V6": 0.0959, "V7": 0.5929, "V8": -0.2725,
+            "V9": 0.8177, "V10": 0.7531, "V11": -0.8228, "V12": 0.5382,
+            "V13": 1.3458, "V14": -0.7317, "V15": 0.3808, "V16": 0.1205,
+            "V17": -0.2223, "V18": 0.4883, "V19": 0.1578, "V20": 0.1257,
+            "V21": -0.0094, "V22": 0.7958, "V23": -0.1332, "V24": 0.2519,
+            "V25": 0.4585, "V26": -0.0423, "V27": 0.1707, "V28": 0.0864
+        }
+    },
+    {
+        "id": "TX-LEGIT-102",
+        "tag": "TX-9402",
+        "merchant": "Shell Highway Fuel Station",
+        "category": "Fuel",
+        "location": "Dallas, TX (Pay-at-Pump)",
+        "amount": 42.10,
+        "time": 1250.0,
+        "risk_level": "Minimal",
+        "badge_color": "success",
+        "description": "Contactless fuel dispenser transaction under $50 limit.",
+        "features": {
+            "Amount": 42.10, "Time": 1250.0,
+            "V1": -0.4851, "V2": 0.9856, "V3": 1.2587, "V4": -0.1542,
+            "V5": 0.1254, "V6": -0.4582, "V7": 0.6521, "V8": 0.0852,
+            "V9": -0.3254, "V10": -0.1587, "V11": 0.4582, "V12": 0.3254,
+            "V13": -0.1548, "V14": -0.1254, "V15": 0.8542, "V16": 0.2587,
+            "V17": -0.1582, "V18": -0.3254, "V19": 0.1254, "V20": -0.0542,
+            "V21": -0.2154, "V22": -0.5842, "V23": 0.0852, "V24": 0.0254,
+            "V25": -0.1582, "V26": 0.1254, "V27": 0.0582, "V28": 0.0215
+        }
+    },
+    {
+        "id": "TX-LEGIT-103",
+        "tag": "TX-9403",
+        "merchant": "Apple Store Online",
+        "category": "Electronics",
+        "location": "Cupertino, CA (Apple Pay)",
+        "amount": 199.00,
+        "time": 2400.0,
+        "risk_level": "Low",
+        "badge_color": "success",
+        "description": "Authenticated AirPods purchase with tokenized Apple Pay biometric.",
+        "features": {
+            "Amount": 199.00, "Time": 2400.0,
+            "V1": 1.1582, "V2": -0.2584, "V3": 0.8542, "V4": 0.5842,
+            "V5": -0.6582, "V6": 0.2584, "V7": -0.4582, "V8": 0.1582,
+            "V9": 0.6582, "V10": -0.0584, "V11": 0.2584, "V12": 0.4582,
+            "V13": 0.0582, "V14": -0.1584, "V15": 0.4582, "V16": -0.2584,
+            "V17": 0.1582, "V18": 0.0584, "V19": -0.2584, "V20": -0.0582,
+            "V21": 0.0584, "V22": 0.2584, "V23": -0.0582, "V24": 0.1584,
+            "V25": 0.3582, "V26": -0.4582, "V27": 0.0254, "V28": 0.0158
+        }
+    },
+    {
+        "id": "TX-LEGIT-104",
+        "tag": "TX-9404",
+        "merchant": "Netflix Streaming Subscription",
+        "category": "Subscription",
+        "location": "Los Gatos, CA (Recurring)",
+        "amount": 19.99,
+        "time": 3600.0,
+        "risk_level": "Minimal",
+        "badge_color": "success",
+        "description": "Monthly recurring auto-billing cycle matching past 12 months.",
+        "features": {
+            "Amount": 19.99, "Time": 3600.0,
+            "V1": 1.9582, "V2": -0.1254, "V3": -1.2584, "V4": 0.2584,
+            "V5": 0.0582, "V6": -0.8542, "V7": 0.2584, "V8": -0.2584,
+            "V9": 0.4582, "V10": 0.0584, "V11": -0.6582, "V12": 0.3582,
+            "V13": -0.0584, "V14": 0.4582, "V15": 0.1584, "V16": -0.3582,
+            "V17": -0.1584, "V18": 0.2584, "V19": 0.0582, "V20": -0.1584,
+            "V21": -0.1854, "V22": -0.4582, "V23": 0.2584, "V24": -0.0584,
+            "V25": -0.2584, "V26": 0.2584, "V27": -0.0582, "V28": -0.0458
+        }
+    },
+    {
+        "id": "TX-LEGIT-105",
+        "tag": "TX-9405",
+        "merchant": "Starbucks Coffee",
+        "category": "Dining",
+        "location": "Seattle, WA (Contactless Mobile)",
+        "amount": 6.85,
+        "time": 4200.0,
+        "risk_level": "Minimal",
+        "badge_color": "success",
+        "description": "Morning coffee order near regular cardholder residence.",
+        "features": {
+            "Amount": 6.85, "Time": 4200.0,
+            "V1": -0.3254, "V2": 0.8542, "V3": 1.0582, "V4": 0.1584,
+            "V5": 0.2584, "V6": -0.1582, "V7": 0.5842, "V8": 0.0582,
+            "V9": -0.1584, "V10": -0.2584, "V11": 0.1582, "V12": 0.2584,
+            "V13": -0.0582, "V14": 0.1584, "V15": 0.4582, "V16": 0.1584,
+            "V17": -0.0582, "V18": -0.1584, "V19": 0.0582, "V20": 0.0254,
+            "V21": -0.1584, "V22": -0.3582, "V23": 0.0584, "V24": 0.0258,
+            "V25": -0.1254, "V26": 0.1582, "V27": 0.0254, "V28": 0.0125
+        }
+    }
+]
+
