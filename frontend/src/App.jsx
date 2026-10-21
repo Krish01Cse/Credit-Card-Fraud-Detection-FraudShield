@@ -1503,6 +1503,37 @@ export default function App() {
                         </button>
                       </div>
                     </div>
+
+                    {/* Search & Category Filter Chips */}
+                    <div className="tx-search-row">
+                      <div className="tx-search-input">
+                        <Search size={14} color="#94a3b8" />
+                        <input
+                          type="text"
+                          placeholder="Search merchant, tag, or description..."
+                          value={sampleSearch}
+                          onChange={(e) => {
+                            setSampleSearch(e.target.value);
+                            fetchSampleTransactions(sampleCategory, e.target.value);
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="tx-filter-chips">
+                      {['All', 'Crypto & Cash', 'ATM Withdrawal', 'Groceries', 'Fuel', 'Electronics', 'High-Ticket Retail'].map((cat) => (
+                        <button
+                          key={cat}
+                          className={`tx-filter-chip ${sampleCategory === cat ? 'active' : ''}`}
+                          onClick={() => {
+                            setSampleCategory(cat);
+                            fetchSampleTransactions(cat, sampleSearch);
+                          }}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
