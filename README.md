@@ -37,9 +37,12 @@ FraudShield is an academic machine learning project that analyses credit card tr
    - 2x2 **Confusion Matrix Heatmap** (True Negatives, False Positives, False Negatives, True Positives).
    - Class-level Classification Report metrics.
 
-4. **Real-time Transaction Fraud Inspector**:
-   - Single-transaction fraud probability gauge with instant visual verdict.
+4. **Real-time Transaction Fraud Inspector & Authentic Catalog**:
+   - Single-transaction fraud probability gauge with instant visual verdict and dynamic risk badge.
    - Authentic Kaggle preset scenario buttons: `[ 📋 Fill Legit Sample ]` and `[ ⚠️ Fill Fraud Sample ]`.
+   - **Interactive Authentic Transaction Repository**: Browse curated lists of legitimate (`✓ Verified Clean Swipes`) and fraudulent (`⚠️ High-Risk Fraud Samples`) transactions extracted from real Kaggle benchmarks.
+   - Multi-category filtering (`Crypto & Cash`, `ATM Withdrawal`, `Groceries`, `Fuel`, `Electronics`, `High-Ticket Retail`) and instant text search.
+   - Click-to-load feature: select any card in the list to populate its complete 30-feature vector (`Amount`, `Time`, `V1–V28`) into the inspector and trigger real-time model re-evaluation.
    - Collapsible advanced PCA vector editor (V1 to V28).
 
 ---
