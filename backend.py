@@ -877,9 +877,37 @@ SAMPLE_FRAUD_TRANSACTIONS = [
             "V13": -0.4582, "V14": -5.6582, "V15": 0.2584, "V16": -2.8542,
             "V17": -4.3582, "V18": -1.1254, "V19": 0.8542, "V20": 0.4582,
             "V21": 0.6582, "V22": -0.2584, "V23": -0.3582, "V24": 0.1254,
-            "V25": 0.0852, "V26": 0.2584, "V27": 0.4582, "V28": -0.1854
         }
     }
 ]
+
+
+def get_sample_transactions(category: str = None, query: str = None):
+    """
+    Returns curated legitimate and fraudulent transaction lists with optional
+    category filtering and search query on merchant, tag, or description.
+    """
+    def filter_txs(tx_list):
+        filtered = tx_list
+        if category and category.lower() != "all":
+            filtered = [tx for tx in filtered if category.lower() in tx.get("category", "").lower()]
+        if query:
+            q = query.lower()
+            filtered = [
+                tx for tx in filtered
+                if q in tx.get("merchant", "").lower()
+                or q in tx.get("tag", "").lower()
+                or q in tx.get("description", "").lower()
+                or q in tx.get("category", "").lower()
+            ]
+        return filtered
+
+    return {
+        "legit_transactions": filter_txs(SAMPLE_LEGIT_TRANSACTIONS),
+        "fraud_transactions": filter_txs(SAMPLE_FRAUD_TRANSACTIONS),
+        "total_legit": len(SAMPLE_LEGIT_TRANSACTIONS),
+        "total_fraud": len(SAMPLE_FRAUD_TRANSACTIONS),
+    }
+
 
 
