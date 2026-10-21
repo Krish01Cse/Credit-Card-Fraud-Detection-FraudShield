@@ -114,6 +114,11 @@ FRAUD_PRESET = {
 }
 
 
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
+
 @app.get("/api/status")
 def get_status():
     ensure_data_and_models()
@@ -141,25 +146,25 @@ def get_dashboard_data():
 
     # Top 4 Metric Cards for Credit Card Fraud Detection
     top_metrics = {
-        "active_employees": {
+        "monitored_swipes": {
             "label": "Total Transactions Monitored",
             "value": f"{total_count:,}",
             "hint": f"{legit_count:,} Legit Swipes",
             "icon": "credit-card",
         },
-        "number_projects": {
+        "flagged_frauds": {
             "label": "Flagged Fraud Anomalies",
             "value": f"{fraud_count:,}",
             "hint": f"{(fraud_count/total_count)*100:.3f}% Fraud Rate",
             "icon": "alert-triangle",
         },
-        "number_tasks": {
+        "active_models": {
             "label": "Active ML Classifiers",
             "value": f"{len(STATE['trained_models'])}",
             "hint": "RF, KNN, DT, LR",
             "icon": "cpu",
         },
-        "target_percentage": {
+        "precision_rate": {
             "label": "Peak Detection Precision",
             "value": best_acc,
             "hint": f"F1-Score: {best_f1}",
@@ -174,13 +179,13 @@ def get_dashboard_data():
         {"month": "Mar", "value": 48},
         {"month": "Apr", "value": 62},
         {
-            "month": "Mei",
+            "month": "May",
             "value": 137,
             "highlight": True,
             "tooltip": {
-                "project_done": 137,
-                "project_new": 123,
-                "project_cost": 84,
+                "flagged_anomalies": 137,
+                "prevented_losses": "$428,500",
+                "false_positives": 3,
             },
         },
         {"month": "Jun", "value": 38},
