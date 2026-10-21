@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Trained models (large binary files — regenerate by running the app)
+models/
+
+# Dataset (download from Kaggle separately)
+*.csv
+*.zip
+
+# Streamlit
+.streamlit/*
+!.streamlit/config.toml
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
