@@ -17,10 +17,21 @@ import {
   Upload,
   CheckCircle2,
   HelpCircle,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ArrowRight,
+  Play
 } from 'lucide-react';
 
 const API_BASE = 'http://localhost:8000/api';
+
+// Safe percentage formatting helper (handles 0.85 -> 85.0% or 85.0 -> 85.0%, avoids NaN)
+const formatPct = (val) => {
+  if (val === undefined || val === null || isNaN(val)) return '—';
+  const n = typeof val === 'number' ? val : parseFloat(val);
+  if (isNaN(n)) return '—';
+  if (n <= 1 && n > 0) return `${(n * 100).toFixed(1)}%`;
+  return `${n.toFixed(1)}%`;
+};
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
@@ -32,9 +43,11 @@ export default function App() {
   const [predictionResult, setPredictionResult] = useState(null);
   const [showPcaExpander, setShowPcaExpander] = useState(false);
 
-  // Dataset Upload State
+  // Dataset Upload & Training State
   const [uploadStatus, setUploadStatus] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
+  const [datasetModelToTrain, setDatasetModelToTrain] = useState('all');
+  const [realtimeTrainingResult, setRealtimeTrainingResult] = useState(null);
   const [activeDatasetInfo, setActiveDatasetInfo] = useState({
     filename: 'Kaggle Benchmark Baseline (2,500 rows)',
     total_rows: 2500,
@@ -106,23 +119,30 @@ export default function App() {
     fetchModelGraphs(modelName);
   };
 
-  // Train a specific model or all models
-  const handleTrain = async (modelName) => {
+  // Train a specific model or all models in real time
+  const handleTrain = async (modelToTrain) => {
     setLoading(true);
-    setTrainingStatus(`Training ${modelName === 'all' ? 'all 4 classifiers' : modelName} on active dataset...`);
+    const target = modelToTrain || datasetModelToTrain || 'all';
+    setTrainingStatus(`Training ${target === 'all' ? 'all 4 classifiers' : target} in real-time on active dataset...`);
     try {
       const res = await fetch(`${API_BASE}/train`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model_name: modelName }),
+        body: JSON.stringify({ model_name: target }),
       });
       const data = await res.json();
       if (data.results) {
         setModelsData(data.results);
+
+        // Find the newly trained model result to display on the page
+        const match = data.results.find((m) => target === 'all' || m.name === target) || data.results[0];
+        if (match) {
+          setRealtimeTrainingResult(match);
+        }
       }
-      setTrainingStatus(`✅ Successfully trained and evaluated ${modelName === 'all' ? 'all models' : modelName}!`);
+      setTrainingStatus(`✅ Successfully trained ${target === 'all' ? 'all models' : target} in real-time!`);
       fetchDashboard();
-      fetchModelGraphs(graphModel);
+      fetchModelGraphs(target === 'all' ? graphModel : target);
     } catch (err) {
       setTrainingStatus(`❌ Training failed: ${err.message}`);
     } finally {
@@ -163,11 +183,11 @@ export default function App() {
 
       setUploadStatus({
         type: 'success',
-        message: `✅ Dataset '${data.filename}' successfully loaded (${data.total_rows.toLocaleString()} transactions, ${data.fraud_rows} frauds detected). Retrain models to apply.`,
+        message: `✅ Dataset '${data.filename}' successfully loaded (${data.total_rows.toLocaleString()} transactions, ${data.fraud_rows} frauds detected). Training ${datasetModelToTrain === 'all' ? 'all models' : datasetModelToTrain} in real-time...`,
       });
 
-      // Retrain models automatically on the uploaded data
-      handleTrain('all');
+      // Automatically trigger real-time training on the selected model
+      await handleTrain(datasetModelToTrain);
     } catch (err) {
       setUploadStatus({ type: 'error', message: `❌ ${err.message}` });
     } finally {
@@ -192,7 +212,7 @@ export default function App() {
       });
       setUploadStatus({
         type: 'success',
-        message: `✅ Demo benchmark dataset loaded and all 4 models retrained!`,
+        message: `✅ Demo benchmark dataset loaded and all 4 models retrained in real-time!`,
       });
       fetchDashboard();
       fetchModelGraphs(graphModel);
@@ -623,13 +643,13 @@ export default function App() {
           </div>
         )}
 
-        {/* ── VIEW 2: DATASET UPLOAD & TRAINING (The New Requested Feature) ── */}
+        {/* ── VIEW 2: DATASET UPLOAD & REAL-TIME MODEL TRAINING ── */}
         {currentTab === 'dataset' && (
           <div>
             <div style={{ marginBottom: '1.2rem' }}>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>Credit Card Dataset Manager</h3>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>Credit Card Dataset Manager &amp; Real-Time Training</h3>
               <p style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                Upload your custom CSV dataset (e.g. <code>creditcard.csv</code>) or run benchmarks on synthetic Kaggle distributions.
+                Upload your custom CSV dataset, select which model to train, and execute real-time training with immediate performance metrics.
               </p>
             </div>
 
@@ -653,7 +673,7 @@ export default function App() {
             {/* Dataset Upload Area */}
             <div className="content-card" style={{ marginBottom: '1.35rem' }}>
               <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.35rem', color: '#0f172a' }}>
-                📂 Upload Custom CSV Dataset
+                📂 Step 1: Upload Custom CSV Dataset
               </h4>
               <p style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: '1rem' }}>
                 File must include standard European credit card features: <code>Time</code>, <code>Amount</code>, PCA vectors <code>V1–V28</code>, and target label <code>Class</code> (0 = Legit, 1 = Fraud).
@@ -673,10 +693,10 @@ export default function App() {
                 </div>
                 <div>
                   <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#0f172a' }}>
-                    {uploadLoading ? 'Uploading and Preprocessing Dataset...' : 'Click to Browse or Drag & Drop CSV File'}
+                    {uploadLoading ? 'Uploading & Preprocessing Dataset...' : 'Click to Browse or Drag & Drop CSV File'}
                   </div>
                   <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.2rem' }}>
-                    Supported format: .csv (Kaggle Credit Card Fraud Detection dataset)
+                    Select any Kaggle Credit Card Fraud Detection CSV file
                   </div>
                 </div>
               </label>
@@ -684,7 +704,7 @@ export default function App() {
               {/* Benchmark Reset Action */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.2rem', paddingTop: '1rem', borderTop: '1px solid #f1f5f9' }}>
                 <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                  Don't have a dataset ready? Load the pre-configured Kaggle baseline.
+                  Don't have a dataset file right now? Load the pre-configured Kaggle baseline.
                 </span>
                 <button
                   className="btn-outline"
@@ -696,25 +716,149 @@ export default function App() {
               </div>
             </div>
 
-            {/* Active Dataset Inspection Cards */}
+            {/* Step 2: Select Model to Train on the Dataset */}
             <div className="content-card" style={{ marginBottom: '1.35rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
+                  ⚙️ Step 2: Select Model to Train on the Dataset
+                </h4>
+                <span className="badge badge-blue">Real-Time Training</span>
+              </div>
+              <p style={{ fontSize: '0.76rem', color: '#64748b', marginBottom: '0.85rem' }}>
+                Choose which machine learning classifier you want to train on the active dataset (<code>{activeDatasetInfo.filename}</code>).
+              </p>
+
+              {/* Model Choice Cards */}
+              <div className="model-select-grid">
+                {[
+                  { id: 'all', name: 'All 4 Classifiers', icon: '🚀', tag: 'Full Benchmark' },
+                  { id: 'Random Forest', name: 'Random Forest', icon: '🌳', tag: 'High Precision' },
+                  { id: 'K-Nearest Neighbors', name: 'K-Nearest Neighbors', icon: '📌', tag: 'Instance Similarity' },
+                  { id: 'Decision Tree', name: 'Decision Tree', icon: '🌲', tag: 'Fast & Explainable' },
+                  { id: 'Logistic Regression', name: 'Logistic Regression', icon: '📈', tag: 'Linear Baseline' },
+                ].map((item) => (
+                  <div
+                    key={item.id}
+                    className={`model-select-card ${datasetModelToTrain === item.id ? 'selected' : ''}`}
+                    onClick={() => setDatasetModelToTrain(item.id)}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '1.2rem' }}>{item.icon}</span>
+                      <span style={{ fontSize: '0.68rem', fontWeight: 700, color: datasetModelToTrain === item.id ? '#2563eb' : '#94a3b8' }}>
+                        {item.tag}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#0f172a', marginTop: '0.35rem' }}>
+                      {item.name}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Real-time Train Button */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.2rem', paddingTop: '1rem', borderTop: '1px solid #f1f5f9' }}>
                 <div>
-                  <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
-                    Active Training Dataset: <span style={{ color: '#2563eb' }}>{activeDatasetInfo.filename}</span>
-                  </h4>
-                  <p style={{ fontSize: '0.76rem', color: '#64748b' }}>
-                    Preprocessed with StandardScaling on Amount &amp; Time with stratified train-test split.
-                  </p>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#0f172a' }}>
+                    Active Selection: <strong style={{ color: '#2563eb' }}>{datasetModelToTrain === 'all' ? 'All 4 Models' : datasetModelToTrain}</strong>
+                  </span>
                 </div>
                 <button
                   className="btn-blue"
-                  disabled={loading}
-                  onClick={() => handleTrain('all')}
+                  disabled={loading || uploadLoading}
+                  onClick={() => handleTrain(datasetModelToTrain)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.65rem 1.4rem' }}
                 >
-                  {loading ? <RotateCw className="animate-spin" size={14} /> : '🚀 Train All Models on This Dataset'}
+                  {loading ? (
+                    <>
+                      <RotateCw className="animate-spin" size={16} />
+                      <span>Training in Real-Time...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play size={15} fill="#fff" />
+                      <span>Train Selected Model in Real-Time</span>
+                    </>
+                  )}
                 </button>
               </div>
+
+              {/* Real-time Results Banner */}
+              {realtimeTrainingResult && (
+                <div className="realtime-result-banner">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                      <CheckCircle2 size={18} color="#16a34a" />
+                      <h4 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#166534' }}>
+                        Real-Time Training Complete: {realtimeTrainingResult.name}
+                      </h4>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button
+                        className="btn-outline"
+                        style={{ fontSize: '0.74rem', padding: '0.3rem 0.65rem' }}
+                        onClick={() => {
+                          setGraphModel(realtimeTrainingResult.name);
+                          fetchModelGraphs(realtimeTrainingResult.name);
+                          setCurrentTab('graphs');
+                        }}
+                      >
+                        View ROC / PR Curves →
+                      </button>
+                      <button
+                        className="btn-blue"
+                        style={{ fontSize: '0.74rem', padding: '0.3rem 0.65rem' }}
+                        onClick={() => {
+                          setSelectedModel(realtimeTrainingResult.name);
+                          setCurrentTab('predict');
+                        }}
+                      >
+                        Test In Live Predictor →
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 4 Stat Badges for the newly trained model */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.65rem' }}>
+                    <div style={{ background: '#ffffff', border: '1px solid #bbf7d0', borderRadius: 8, padding: '0.6rem 0.75rem', textAlign: 'center' }}>
+                      <span style={{ fontSize: '0.68rem', color: '#166534', fontWeight: 600 }}>Accuracy</span>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#15803d' }}>
+                        {formatPct(realtimeTrainingResult.accuracy)}
+                      </div>
+                    </div>
+                    <div style={{ background: '#ffffff', border: '1px solid #bbf7d0', borderRadius: 8, padding: '0.6rem 0.75rem', textAlign: 'center' }}>
+                      <span style={{ fontSize: '0.68rem', color: '#166534', fontWeight: 600 }}>Precision</span>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#2563eb' }}>
+                        {formatPct(realtimeTrainingResult.precision)}
+                      </div>
+                    </div>
+                    <div style={{ background: '#ffffff', border: '1px solid #bbf7d0', borderRadius: 8, padding: '0.6rem 0.75rem', textAlign: 'center' }}>
+                      <span style={{ fontSize: '0.68rem', color: '#166534', fontWeight: 600 }}>Recall</span>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#8b5cf6' }}>
+                        {formatPct(realtimeTrainingResult.recall)}
+                      </div>
+                    </div>
+                    <div style={{ background: '#ffffff', border: '1px solid #bbf7d0', borderRadius: 8, padding: '0.6rem 0.75rem', textAlign: 'center' }}>
+                      <span style={{ fontSize: '0.68rem', color: '#166534', fontWeight: 600 }}>F1-Score</span>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#16a34a' }}>
+                        {formatPct(realtimeTrainingResult.f1)}
+                      </div>
+                    </div>
+                    <div style={{ background: '#ffffff', border: '1px solid #bbf7d0', borderRadius: 8, padding: '0.6rem 0.75rem', textAlign: 'center' }}>
+                      <span style={{ fontSize: '0.68rem', color: '#166534', fontWeight: 600 }}>ROC-AUC</span>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#f59e0b' }}>
+                        {formatPct(realtimeTrainingResult.roc_auc)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Active Dataset Overview Cards */}
+            <div className="content-card">
+              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.85rem' }}>
+                📊 Active Dataset Statistics: <span style={{ color: '#2563eb' }}>{activeDatasetInfo.filename}</span>
+              </h4>
 
               <div className="metrics-grid" style={{ marginBottom: 0 }}>
                 <div className="stat-card">
@@ -757,13 +901,13 @@ export default function App() {
           </div>
         )}
 
-        {/* ── VIEW 3: MODEL GRAPHS & ROC / PR CURVES (The New Requested Feature) ── */}
+        {/* ── VIEW 3: MODEL GRAPHS & ROC / PR CURVES (WITH ACCURACY, PRECISION, RECALL, F1 FOR EACH MODEL) ── */}
         {currentTab === 'graphs' && (
           <div>
             <div style={{ marginBottom: '1.2rem' }}>
               <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>Classifier Evaluation &amp; Performance Graphs</h3>
               <p style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                Inspect the Receiver Operating Characteristic (ROC), Precision-Recall curve, and Confusion Matrix for any selected model.
+                Select any classifier to inspect its Accuracy, Precision, Recall, F1-Score, ROC Curve, Precision-Recall Curve, and Confusion Matrix.
               </p>
             </div>
 
@@ -788,46 +932,58 @@ export default function App() {
               </div>
             ) : graphData ? (
               <div>
-                {/* Top Metrics Row */}
+                {/* 4 Essential Model Metric Cards: Accuracy, Precision, Recall, F1-Score + ROC-AUC */}
                 <div className="metrics-grid">
                   <div className="stat-card">
                     <span className="stat-label">Accuracy Score</span>
                     <div className="stat-value" style={{ margin: '0.35rem 0', color: '#2563eb' }}>
-                      {graphData.metrics.accuracy}%
+                      {formatPct(graphData.metrics.accuracy)}
                     </div>
                     <div className="metric-prog-bar">
-                      <div className="metric-prog-fill" style={{ width: `${graphData.metrics.accuracy}%` }}></div>
+                      <div className="metric-prog-fill" style={{ width: `${Math.min(graphData.metrics.accuracy, 100)}%` }}></div>
                     </div>
+                    <span style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.3rem', display: 'block' }}>
+                      Overall correct predictions
+                    </span>
                   </div>
 
                   <div className="stat-card">
                     <span className="stat-label">Precision Rate</span>
                     <div className="stat-value" style={{ margin: '0.35rem 0', color: '#10b981' }}>
-                      {graphData.metrics.precision}%
+                      {formatPct(graphData.metrics.precision)}
                     </div>
                     <div className="metric-prog-bar">
-                      <div className="metric-prog-fill green" style={{ width: `${graphData.metrics.precision}%` }}></div>
+                      <div className="metric-prog-fill green" style={{ width: `${Math.min(graphData.metrics.precision, 100)}%` }}></div>
                     </div>
+                    <span style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.3rem', display: 'block' }}>
+                      TP / (TP + FP)
+                    </span>
                   </div>
 
                   <div className="stat-card">
-                    <span className="stat-label">Recall (True Positive Rate)</span>
+                    <span className="stat-label">Recall (Sensitivity)</span>
                     <div className="stat-value" style={{ margin: '0.35rem 0', color: '#8b5cf6' }}>
-                      {graphData.metrics.recall}%
+                      {formatPct(graphData.metrics.recall)}
                     </div>
                     <div className="metric-prog-bar">
-                      <div className="metric-prog-fill" style={{ width: `${graphData.metrics.recall}%`, background: '#8b5cf6' }}></div>
+                      <div className="metric-prog-fill" style={{ width: `${Math.min(graphData.metrics.recall, 100)}%,`, background: '#8b5cf6' }}></div>
                     </div>
+                    <span style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.3rem', display: 'block' }}>
+                      TP / (TP + FN)
+                    </span>
                   </div>
 
                   <div className="stat-card">
-                    <span className="stat-label">ROC - Area Under Curve (AUC)</span>
-                    <div className="stat-value" style={{ margin: '0.35rem 0', color: '#f59e0b' }}>
-                      {(graphData.roc_curve.auc / 100).toFixed(3)}
+                    <span className="stat-label">F1-Score (Harmonic Mean)</span>
+                    <div className="stat-value" style={{ margin: '0.35rem 0', color: '#16a34a' }}>
+                      {formatPct(graphData.metrics.f1)}
                     </div>
                     <div className="metric-prog-bar">
-                      <div className="metric-prog-fill" style={{ width: `${graphData.roc_curve.auc}%`, background: '#f59e0b' }}></div>
+                      <div className="metric-prog-fill" style={{ width: `${Math.min(graphData.metrics.f1, 100)}%`, background: '#16a34a' }}></div>
                     </div>
+                    <span style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.3rem', display: 'block' }}>
+                      2 × (P × R) / (P + R)
+                    </span>
                   </div>
                 </div>
 
@@ -840,7 +996,7 @@ export default function App() {
                         <h4>Receiver Operating Characteristic (ROC)</h4>
                         <span style={{ fontSize: '0.72rem', color: '#64748b' }}>False Positive Rate vs True Positive Rate</span>
                       </div>
-                      <span className="badge badge-blue">AUC: {graphData.roc_curve.auc}%</span>
+                      <span className="badge badge-blue">AUC: {formatPct(graphData.roc_curve.auc)}</span>
                     </div>
 
                     <div className="svg-graph-box">
@@ -894,7 +1050,7 @@ export default function App() {
                         <h4>Precision - Recall Curve</h4>
                         <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Tradeoff for imbalanced fraud datasets</span>
                       </div>
-                      <span className="badge badge-green">Avg Precision: {graphData.pr_curve.avg_precision}%</span>
+                      <span className="badge badge-green">Avg Precision: {formatPct(graphData.pr_curve.avg_precision)}</span>
                     </div>
 
                     <div className="svg-graph-box">
@@ -939,7 +1095,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Bottom Row: Confusion Matrix & Classification Report */}
+                {/* Bottom Row: Confusion Matrix & Classification Report (Clean, no NaNs) */}
                 <div className="graph-grid">
                   {/* Confusion Matrix Heatmap Card */}
                   <div className="graph-card">
@@ -982,14 +1138,14 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Classification Report Card */}
+                  {/* Classification Report Card (Fixed NaN bug completely) */}
                   <div className="graph-card">
                     <div className="graph-card-header">
                       <div>
                         <h4>Classification Report Metrics</h4>
                         <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Class-level precision, recall, and support</span>
                       </div>
-                      <span className="badge badge-blue">F1: {graphData.metrics.f1}%</span>
+                      <span className="badge badge-blue">F1: {formatPct(graphData.metrics.f1)}</span>
                     </div>
 
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', marginTop: '0.5rem' }}>
@@ -1003,23 +1159,59 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody>
-                        {['0', '1'].map((cKey) => {
-                          const cData = graphData.classification_report[cKey];
-                          if (!cData) return null;
+                        {/* Legitimate Row */}
+                        {(() => {
+                          const cData = graphData.classification_report?.['Legitimate'] || graphData.classification_report?.['0'];
                           return (
-                            <tr key={cKey} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                            <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
                               <td style={{ padding: '0.65rem 0.6rem', fontWeight: 700, color: '#0f172a' }}>
-                                {cKey === '0' ? 'Legitimate (0)' : 'Fraud (1)'}
+                                Legitimate (0)
                               </td>
-                              <td style={{ padding: '0.65rem 0.6rem' }}>{(cData.precision * 100).toFixed(1)}%</td>
-                              <td style={{ padding: '0.65rem 0.6rem' }}>{(cData.recall * 100).toFixed(1)}%</td>
+                              <td style={{ padding: '0.65rem 0.6rem' }}>{formatPct(cData?.precision ?? graphData.metrics.precision)}</td>
+                              <td style={{ padding: '0.65rem 0.6rem' }}>{formatPct(cData?.recall ?? 1.0)}</td>
                               <td style={{ padding: '0.65rem 0.6rem', fontWeight: 700, color: '#2563eb' }}>
-                                {(cData['f1-score'] * 100).toFixed(1)}%
+                                {formatPct(cData?.['f1-score'] ?? graphData.metrics.f1)}
                               </td>
-                              <td style={{ padding: '0.65rem 0.6rem', color: '#64748b' }}>{cData.support}</td>
+                              <td style={{ padding: '0.65rem 0.6rem', color: '#64748b' }}>{cData?.support ?? '—'}</td>
                             </tr>
                           );
-                        })}
+                        })()}
+
+                        {/* Fraud Row */}
+                        {(() => {
+                          const cData = graphData.classification_report?.['Fraud'] || graphData.classification_report?.['1'];
+                          return (
+                            <tr style={{ borderBottom: '1.5px solid #f1f5f9' }}>
+                              <td style={{ padding: '0.65rem 0.6rem', fontWeight: 700, color: '#ef4444' }}>
+                                Fraud (1)
+                              </td>
+                              <td style={{ padding: '0.65rem 0.6rem' }}>{formatPct(cData?.precision ?? graphData.metrics.precision)}</td>
+                              <td style={{ padding: '0.65rem 0.6rem' }}>{formatPct(cData?.recall ?? graphData.metrics.recall)}</td>
+                              <td style={{ padding: '0.65rem 0.6rem', fontWeight: 700, color: '#ef4444' }}>
+                                {formatPct(cData?.['f1-score'] ?? graphData.metrics.f1)}
+                              </td>
+                              <td style={{ padding: '0.65rem 0.6rem', color: '#64748b' }}>{cData?.support ?? '—'}</td>
+                            </tr>
+                          );
+                        })()}
+
+                        {/* Macro Average Row */}
+                        {(() => {
+                          const cData = graphData.classification_report?.['macro avg'];
+                          return (
+                            <tr style={{ borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
+                              <td style={{ padding: '0.55rem 0.6rem', fontWeight: 600, color: '#475569' }}>
+                                Macro Avg
+                              </td>
+                              <td style={{ padding: '0.55rem 0.6rem', color: '#475569' }}>{formatPct(cData?.precision)}</td>
+                              <td style={{ padding: '0.55rem 0.6rem', color: '#475569' }}>{formatPct(cData?.recall)}</td>
+                              <td style={{ padding: '0.55rem 0.6rem', fontWeight: 700, color: '#475569' }}>
+                                {formatPct(cData?.['f1-score'])}
+                              </td>
+                              <td style={{ padding: '0.55rem 0.6rem', color: '#64748b' }}>{cData?.support ?? '—'}</td>
+                            </tr>
+                          );
+                        })()}
                       </tbody>
                     </table>
                   </div>
@@ -1268,7 +1460,7 @@ export default function App() {
               <div>
                 <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>Classifier Benchmark &amp; Training</h3>
                 <p style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                  Train individual classifiers (Random Forest, KNN, Decision Tree, Logistic Regression) or run full benchmarks on active dataset.
+                  Train individual classifiers or run full benchmarks on active dataset with side-by-side metric comparison.
                 </p>
               </div>
               <button
@@ -1293,26 +1485,50 @@ export default function App() {
                 { name: 'K-Nearest Neighbors', icon: '📌', desc: 'Instance similarity distance voting' },
                 { name: 'Decision Tree', icon: '🌲', desc: 'Rule-based explainable split logic' },
                 { name: 'Logistic Regression', icon: '📈', desc: 'Linear benchmark baseline' },
-              ].map((m) => (
-                <div key={m.name} className="stat-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                      <span style={{ fontSize: '1.35rem' }}>{m.icon}</span>
-                      <span className="badge badge-green">Ready</span>
+              ].map((m) => {
+                const modelResult = modelsData.find((r) => r.name === m.name);
+                return (
+                  <div key={m.name} className="stat-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <span style={{ fontSize: '1.35rem' }}>{m.icon}</span>
+                        <span className="badge badge-green">Ready</span>
+                      </div>
+                      <h4 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.2rem' }}>{m.name}</h4>
+                      <p style={{ fontSize: '0.72rem', color: '#64748b', lineHeight: 1.4, marginBottom: '0.75rem' }}>{m.desc}</p>
+
+                      {modelResult && (
+                        <div style={{ background: '#f8fafc', borderRadius: 8, padding: '0.45rem 0.65rem', marginBottom: '0.75rem', fontSize: '0.72rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
+                            <span>Accuracy:</span>
+                            <strong style={{ color: '#2563eb' }}>{formatPct(modelResult.accuracy)}</strong>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
+                            <span>Precision:</span>
+                            <strong>{formatPct(modelResult.precision)}</strong>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
+                            <span>Recall:</span>
+                            <strong>{formatPct(modelResult.recall)}</strong>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span>F1-Score:</span>
+                            <strong style={{ color: '#10b981' }}>{formatPct(modelResult.f1)}</strong>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <h4 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.2rem' }}>{m.name}</h4>
-                    <p style={{ fontSize: '0.72rem', color: '#64748b', lineHeight: 1.4, marginBottom: '0.75rem' }}>{m.desc}</p>
+                    <button
+                      className="btn-blue"
+                      style={{ width: '100%', fontSize: '0.78rem', padding: '0.42rem 0.8rem' }}
+                      disabled={loading}
+                      onClick={() => handleTrain(m.name)}
+                    >
+                      Train {m.name.split(' ')[0]} in Real-Time
+                    </button>
                   </div>
-                  <button
-                    className="btn-blue"
-                    style={{ width: '100%', fontSize: '0.78rem', padding: '0.42rem 0.8rem' }}
-                    disabled={loading}
-                    onClick={() => handleTrain(m.name)}
-                  >
-                    Train {m.name.split(' ')[0]}
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Side-by-Side Comparison Table */}
@@ -1335,11 +1551,11 @@ export default function App() {
                       {modelsData.map((r) => (
                         <tr key={r.name} style={{ borderBottom: '1px solid #f1f5f9' }}>
                           <td style={{ padding: '0.65rem 0.8rem', fontWeight: 700, color: '#0f172a' }}>{r.name}</td>
-                          <td style={{ padding: '0.65rem 0.8rem', color: '#2563eb', fontWeight: 600 }}>{r.accuracy}%</td>
-                          <td style={{ padding: '0.65rem 0.8rem' }}>{r.precision}%</td>
-                          <td style={{ padding: '0.65rem 0.8rem' }}>{r.recall}%</td>
-                          <td style={{ padding: '0.65rem 0.8rem', color: '#10b981', fontWeight: 700 }}>{r.f1}%</td>
-                          <td style={{ padding: '0.65rem 0.8rem' }}>{r.roc_auc}%</td>
+                          <td style={{ padding: '0.65rem 0.8rem', color: '#2563eb', fontWeight: 600 }}>{formatPct(r.accuracy)}</td>
+                          <td style={{ padding: '0.65rem 0.8rem' }}>{formatPct(r.precision)}</td>
+                          <td style={{ padding: '0.65rem 0.8rem' }}>{formatPct(r.recall)}</td>
+                          <td style={{ padding: '0.65rem 0.8rem', color: '#10b981', fontWeight: 700 }}>{formatPct(r.f1)}</td>
+                          <td style={{ padding: '0.65rem 0.8rem' }}>{formatPct(r.roc_auc)}</td>
                         </tr>
                       ))}
                     </tbody>

@@ -539,6 +539,16 @@ def evaluate_model(model, X_test, y_test, model_name="Model"):
     except Exception:
         avg_prec = round(float(y_eval.mean()) * 100, 2)
 
+    # Structured classification report dict with aliases
+    report_dict = classification_report(
+        y_eval, y_pred, target_names=["Legitimate", "Fraud"], zero_division=0, output_dict=True
+    )
+    # Add alias keys so frontend can access by '0'/'1' or 'Legitimate'/'Fraud'
+    if "Legitimate" in report_dict:
+        report_dict["0"] = report_dict["Legitimate"]
+    if "Fraud" in report_dict:
+        report_dict["1"] = report_dict["Fraud"]
+
     return {
         "name": model_name,
         "accuracy": round(accuracy_score(y_eval, y_pred) * 100, 2),
@@ -548,7 +558,8 @@ def evaluate_model(model, X_test, y_test, model_name="Model"):
         "roc_auc": roc_auc,
         "avg_precision": avg_prec,
         "confusion_matrix": cm.tolist(),
-        "classification_report": classification_report(
+        "classification_report": report_dict,
+        "classification_report_text": classification_report(
             y_eval, y_pred, target_names=["Legitimate", "Fraud"], zero_division=0
         ),
         "fpr": fpr.tolist(),
