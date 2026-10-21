@@ -769,3 +769,117 @@ SAMPLE_LEGIT_TRANSACTIONS = [
     }
 ]
 
+SAMPLE_FRAUD_TRANSACTIONS = [
+    {
+        "id": "TX-FRAUD-201",
+        "tag": "TX-9901",
+        "merchant": "CoinBase Global Crypto Payout",
+        "category": "Crypto & Cash",
+        "location": "Lagos, Nigeria (IP Masked VPN)",
+        "amount": 1840.00,
+        "time": 406.0,
+        "risk_level": "Critical Anomaly",
+        "badge_color": "danger",
+        "description": "High-velocity crypto withdrawal following credential-stuffing attack.",
+        "features": {
+            "Amount": 1840.00, "Time": 406.0,
+            "V1": -4.3979, "V2": 3.8864, "V3": -4.6871, "V4": 4.5676,
+            "V5": -2.4568, "V6": -1.8492, "V7": -4.5544, "V8": 2.8564,
+            "V9": -3.8021, "V10": -5.6044, "V11": 4.1098, "V12": -6.2231,
+            "V13": -0.8597, "V14": -7.1245, "V15": 0.4851, "V16": -3.8965,
+            "V17": -5.8456, "V18": -1.2589, "V19": 1.1564, "V20": 0.8465,
+            "V21": 1.1082, "V22": -0.4371, "V23": -0.5621, "V24": 0.2645,
+            "V25": 0.1856, "V26": 0.4012, "V27": 0.8462, "V28": -0.3214
+        }
+    },
+    {
+        "id": "TX-FRAUD-202",
+        "tag": "TX-9902",
+        "merchant": "Midnight ATM Max Cash Advance",
+        "category": "ATM Withdrawal",
+        "location": "Las Vegas, NV (Strip ATM)",
+        "amount": 2500.00,
+        "time": 720.0,
+        "risk_level": "Severe Fraud",
+        "badge_color": "danger",
+        "description": "Exceeded maximum daily ATM velocity limits at 3:15 AM local time.",
+        "features": {
+            "Amount": 2500.00, "Time": 720.0,
+            "V1": -5.2415, "V2": 4.2584, "V3": -6.1254, "V4": 5.1258,
+            "V5": -3.8542, "V6": -2.1254, "V7": -5.8542, "V8": 3.1254,
+            "V9": -4.2584, "V10": -6.8542, "V11": 4.8542, "V12": -7.1254,
+            "V13": -1.1254, "V14": -8.4582, "V15": 0.2584, "V16": -4.2584,
+            "V17": -6.8542, "V18": -2.1254, "V19": 1.8542, "V20": 1.1254,
+            "V21": 1.4582, "V22": -0.6582, "V23": -0.7582, "V24": 0.3582,
+            "V25": 0.2584, "V26": 0.5582, "V27": 1.1254, "V28": -0.4582
+        }
+    },
+    {
+        "id": "TX-FRAUD-203",
+        "tag": "TX-9903",
+        "merchant": "Luxury Watch Online UK",
+        "category": "High-Ticket Retail",
+        "location": "London, UK (Card-Not-Present)",
+        "amount": 980.50,
+        "time": 1850.0,
+        "risk_level": "High Threat",
+        "badge_color": "danger",
+        "description": "Cross-border rapid checkout using cloned card credentials.",
+        "features": {
+            "Amount": 980.50, "Time": 1850.0,
+            "V1": -3.8542, "V2": 2.9582, "V3": -4.2584, "V4": 3.8542,
+            "V5": -2.1254, "V6": -1.4582, "V7": -3.9582, "V8": 2.1254,
+            "V9": -3.1254, "V10": -5.1254, "V11": 3.6582, "V12": -5.8542,
+            "V13": -0.6582, "V14": -6.4582, "V15": 0.3582, "V16": -3.2584,
+            "V17": -5.1254, "V18": -1.4582, "V19": 1.0582, "V20": 0.6582,
+            "V21": 0.8542, "V22": -0.3582, "V23": -0.4582, "V24": 0.1582,
+            "V25": 0.1254, "V26": 0.3582, "V27": 0.6582, "V28": -0.2584
+        }
+    },
+    {
+        "id": "TX-FRAUD-204",
+        "tag": "TX-9904",
+        "merchant": "International Wire Direct",
+        "category": "Wire Transfer",
+        "location": "Bucharest, Romania (Offshore)",
+        "amount": 3200.00,
+        "time": 2900.0,
+        "risk_level": "Critical Anomaly",
+        "badge_color": "danger",
+        "description": "Immediate wire disbursement with foreign routing number.",
+        "features": {
+            "Amount": 3200.00, "Time": 2900.0,
+            "V1": -6.1254, "V2": 5.1254, "V3": -7.2584, "V4": 6.1254,
+            "V5": -4.8542, "V6": -2.8542, "V7": -7.1254, "V8": 4.1254,
+            "V9": -5.1254, "V10": -8.1254, "V11": 5.8542, "V12": -8.6582,
+            "V13": -1.4582, "V14": -9.8542, "V15": 0.1582, "V16": -5.1254,
+            "V17": -7.8542, "V18": -2.8542, "V19": 2.1254, "V20": 1.4582,
+            "V21": 1.8542, "V22": -0.8542, "V23": -0.9582, "V24": 0.4582,
+            "V25": 0.3582, "V26": 0.6582, "V27": 1.4582, "V28": -0.5842
+        }
+    },
+    {
+        "id": "TX-FRAUD-205",
+        "tag": "TX-9905",
+        "merchant": "Darknet Digital Marketplace",
+        "category": "Darknet / Black Market",
+        "location": "Tor Onion Router (Unknown Node)",
+        "amount": 645.20,
+        "time": 3400.0,
+        "risk_level": "Severe Fraud",
+        "badge_color": "danger",
+        "description": "Black-market gift card liquidation through automated bot attack.",
+        "features": {
+            "Amount": 645.20, "Time": 3400.0,
+            "V1": -3.1254, "V2": 2.4582, "V3": -3.6582, "V4": 3.1254,
+            "V5": -1.8542, "V6": -1.1254, "V7": -3.2584, "V8": 1.8542,
+            "V9": -2.6582, "V10": -4.4582, "V11": 3.1254, "V12": -4.9582,
+            "V13": -0.4582, "V14": -5.6582, "V15": 0.2584, "V16": -2.8542,
+            "V17": -4.3582, "V18": -1.1254, "V19": 0.8542, "V20": 0.4582,
+            "V21": 0.6582, "V22": -0.2584, "V23": -0.3582, "V24": 0.1254,
+            "V25": 0.0852, "V26": 0.2584, "V27": 0.4582, "V28": -0.1854
+        }
+    }
+]
+
+
