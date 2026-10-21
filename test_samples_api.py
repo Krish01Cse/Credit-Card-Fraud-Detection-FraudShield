@@ -25,6 +25,27 @@ class TestTransactionSamples(unittest.TestCase):
         self.assertGreaterEqual(len(res["fraud_transactions"]), 1)
         self.assertTrue(any("crypto" in tx["merchant"].lower() for tx in res["fraud_transactions"]))
 
+    def test_sample_transaction_feature_vector_integrity(self):
+        """Verify each sample has complete 30-element feature vector with Time, Amount, V1-V28."""
+        res = backend.get_sample_transactions()
+        for group in ["legit_transactions", "fraud_transactions"]:
+            for tx in res[group]:
+                features = tx["features"]
+                self.assertIn("Time", features)
+                self.assertIn("Amount", features)
+                for i in range(1, 29):
+                    v_key = f"V{i}"
+                    self.assertIn(v_key, features, f"Missing {v_key} in {tx['id']}")
+                    self.assertIsInstance(features[v_key], (int, float))
+
+    def test_sample_transactions_filter_combination(self):
+        """Verify combination of category filter and search query works simultaneously."""
+        res = backend.get_sample_transactions(category="ATM Withdrawal", query="night")
+        self.assertGreaterEqual(len(res["fraud_transactions"]), 1)
+        tx = res["fraud_transactions"][0]
+        self.assertEqual(tx["category"], "ATM Withdrawal")
+        self.assertIn("night", (tx["merchant"] + tx["tag"]).lower())
+
     def test_live_api_sample_transactions_endpoint(self):
         try:
             req = urllib.request.Request("http://127.0.0.1:8000/api/transactions/samples")
