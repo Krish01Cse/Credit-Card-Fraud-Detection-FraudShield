@@ -19,7 +19,8 @@ import {
   HelpCircle,
   FileSpreadsheet,
   ArrowRight,
-  Play
+  Play,
+  X
 } from 'lucide-react';
 
 const API_BASE = 'http://localhost:8000/api';
@@ -1501,13 +1502,13 @@ export default function App() {
                           className={`sample-tab-btn ${sampleTab === 'fraud' ? 'active fraud' : ''}`}
                           onClick={() => setSampleTab('fraud')}
                         >
-                          <span>⚠️ Fraud ({sampleTxData.fraud_transactions?.length || 5})</span>
+                          <span>⚠️ Fraud ({sampleTxData.fraud_transactions ? sampleTxData.fraud_transactions.length : 0})</span>
                         </button>
                         <button
                           className={`sample-tab-btn ${sampleTab === 'legit' ? 'active legit' : ''}`}
                           onClick={() => setSampleTab('legit')}
                         >
-                          <span>✓ Legit ({sampleTxData.legit_transactions?.length || 5})</span>
+                          <span>✓ Legit ({sampleTxData.legit_transactions ? sampleTxData.legit_transactions.length : 0})</span>
                         </button>
                       </div>
                     </div>
@@ -1525,6 +1526,27 @@ export default function App() {
                             fetchSampleTransactions(sampleCategory, e.target.value);
                           }}
                         />
+                        {sampleSearch && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSampleSearch('');
+                              fetchSampleTransactions(sampleCategory, '');
+                            }}
+                            style={{
+                              border: 'none',
+                              background: 'transparent',
+                              cursor: 'pointer',
+                              color: '#94a3b8',
+                              padding: '0 0.25rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                            }}
+                            title="Clear search"
+                          >
+                            <X size={13} />
+                          </button>
+                        )}
                       </div>
                     </div>
 
