@@ -1534,6 +1534,57 @@ export default function App() {
                         </button>
                       ))}
                     </div>
+
+                    {/* Fraud Transactions List */}
+                    {sampleTab === 'fraud' && (
+                      <div className="tx-card-list">
+                        {(sampleTxData.fraud_transactions || []).map((tx) => (
+                          <div
+                            key={tx.id}
+                            className="tx-sample-card"
+                            onClick={() => handleSelectSampleTransaction(tx)}
+                            title="Click to load transaction into inspector and evaluate risk"
+                          >
+                            <div className="tx-sample-left">
+                              <div className="tx-sample-avatar" style={{ background: '#fee2e2', color: '#dc2626' }}>
+                                ⚠️
+                              </div>
+                              <div className="tx-sample-meta">
+                                <h5>{tx.merchant}</h5>
+                                <p>
+                                  <span>{tx.tag}</span>
+                                  <span>·</span>
+                                  <span>{tx.category}</span>
+                                  <span>·</span>
+                                  <span>{tx.location}</span>
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="tx-sample-right">
+                              <div>
+                                <div className="tx-sample-amount" style={{ color: '#dc2626' }}>
+                                  ${tx.amount.toFixed(2)}
+                                </div>
+                                <span className="badge badge-red" style={{ fontSize: '0.68rem', padding: '0.15rem 0.5rem' }}>
+                                  {tx.risk_level}
+                                </span>
+                              </div>
+                              <button
+                                className="btn-outline"
+                                style={{ fontSize: '0.72rem', padding: '0.28rem 0.6rem', background: '#fef2f2', color: '#991b1b', borderColor: '#fecaca' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSelectSampleTransaction(tx);
+                                }}
+                              >
+                                Test Vector →
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
