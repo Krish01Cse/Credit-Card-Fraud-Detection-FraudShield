@@ -10,118 +10,80 @@ FraudShield is an academic machine learning project that analyses credit card tr
 
 | Item | Detail |
 |------|--------|
-| **Type** | Academic mini-project (third-year engineering) |
-| **Frontend** | Streamlit |
-| **Backend / ML** | Python · Scikit-learn · Pandas · NumPy |
-| **Visualisation** | Plotly · Matplotlib |
-| **Model persistence** | Joblib |
-
-### Models trained and compared
-
-- Logistic Regression
-- Decision Tree
-- Random Forest
-- K-Nearest Neighbors (KNN)
-
-### Evaluation metrics
-
-Accuracy · Precision · Recall · F1-Score · ROC-AUC · Average Precision · Confusion Matrix · ROC Curve · Precision-Recall Curve
+| **Type** | Academic Machine Learning Project & Fraud Sentinel |
+| **Frontend** | React 19 + Vite (InsightHub Rounded Aesthetics) |
+| **Backend API** | FastAPI + Uvicorn (REST API on port 8000) |
+| **Machine Learning** | Scikit-learn · Pandas · NumPy · Joblib |
+| **Visualisation** | Interactive SVG ROC Curves · Precision-Recall Curves · Confusion Matrix Heatmaps |
+| **Classifiers** | Random Forest · K-Nearest Neighbors · Decision Tree · Logistic Regression |
 
 ---
 
-## Project Structure
+## Key Features
 
-```
-Credit-Card-Fraud-Detection-FraudShield/
-├── app.py              ← Entry point — run this with streamlit
-├── backend.py          ← All ML: load, preprocess, train, evaluate, predict
-├── pages/
-│   ├── home.py         ← Home / Dashboard page
-│   ├── dataset.py      ← Dataset & Preprocessing page
-│   ├── train.py        ← Model Training & Comparison page
-│   ├── predict.py      ← Fraud Prediction page
-│   └── about.py        ← Results & About page
-├── utils/
-│   └── ui.py           ← Shared CSS, sidebar, and reusable UI components
-├── requirements.txt    ← Python dependencies
-├── README.md           ← This file
-└── models/             ← Created automatically when models are trained
-    ├── scaler.joblib
-    ├── Logistic_Regression.joblib
-    ├── Decision_Tree.joblib
-    ├── Random_Forest.joblib
-    └── K-Nearest_Neighbors.joblib
-```
+1. **Enterprise Fraud Detection Dashboard**:
+   - Monitored swipe counts, fraud anomaly counts, live transaction stream with status badges (`BLOCKED`, `APPROVED`).
+   - Monthly fraud volume trends and prevented financial losses.
 
----
+2. **Custom Dataset Upload & Dynamic Model Retraining**:
+   - Upload any custom European cardholders CSV dataset (`creditcard.csv`).
+   - Automated schema validation (`Time`, `Amount`, `V1–V28`, `Class`), standard scaling, and one-click retraining across all 4 classifiers.
+   - Built-in one-click demo benchmark dataset generator (2,500 rows).
 
-## Dataset
+3. **Model Evaluation & Graph Visualizer**:
+   - Dedicated tab with model selector pills for **Random Forest**, **KNN**, **Decision Tree**, and **Logistic Regression**.
+   - Interactive SVG **Receiver Operating Characteristic (ROC)** curve with Area Under Curve (AUC) scoring.
+   - Interactive SVG **Precision-Recall (PR)** curve with Average Precision metrics.
+   - 2x2 **Confusion Matrix Heatmap** (True Negatives, False Positives, False Negatives, True Positives).
+   - Class-level Classification Report metrics.
 
-FraudShield is designed to work with the [Kaggle Credit Card Fraud Detection](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud) dataset (`creditcard.csv`).
-
-- **284,807** transactions (September 2013, European cardholders)
-- **492** fraud cases (0.172 % — highly imbalanced)
-- Features: `V1`–`V28` (PCA-transformed), `Time`, `Amount`, `Class`
-- `Class`: 0 = Legitimate, 1 = Fraud
-
-> Download `creditcard.csv` from Kaggle before running the application.
+4. **Real-time Transaction Fraud Inspector**:
+   - Single-transaction fraud probability gauge with instant visual verdict.
+   - Authentic Kaggle preset scenario buttons: `[ 📋 Fill Legit Sample ]` and `[ ⚠️ Fill Fraud Sample ]`.
+   - Collapsible advanced PCA vector editor (V1 to V28).
 
 ---
 
-## Installation
+## Quick Start & Running Locally
 
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/<your-username>/Credit-Card-Fraud-Detection-FraudShield.git
-cd Credit-Card-Fraud-Detection-FraudShield
-```
-
-### 2. Create and activate a virtual environment (recommended)
+Run both the FastAPI backend and React frontend with a single command:
 
 ```bash
-python -m venv venv
-source venv/bin/activate        # macOS / Linux
-venv\Scripts\activate           # Windows
+bash run.sh
 ```
 
-### 3. Install dependencies
+Or start the services individually:
 
 ```bash
-pip install -r requirements.txt
+# Terminal 1 — Start FastAPI Backend (Port 8000)
+python3 -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+
+# Terminal 2 — Start React Frontend (Port 5173)
+cd frontend
+npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
----
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173) in your browser.
 
-## Running the Application
-
-```bash
-# Option A — if streamlit is on your PATH
-streamlit run app.py
-
-# Option B — macOS (Python 3.9 user install)
-/Users/krish_01/Library/Python/3.9/bin/streamlit run app.py
-```
-
-The application opens at **http://localhost:8501** in your default browser.
 
 ---
 
 ## Usage Workflow
 
-1. **Dataset page** — Upload `creditcard.csv` and inspect summary statistics.
-2. **Train Models page** — Preprocess data and train all four classifiers.
-3. **Model Comparison page** — Compare models using all evaluation metrics.
-4. **Predict page** — Select a model and enter transaction features to get a fraud prediction.
+1. **Dashboard** — Monitor swipe volume, anomaly statistics, and real-time transaction feeds.
+2. **Dataset & Upload** — Upload custom `creditcard.csv` or load the Kaggle benchmark baseline with one click.
+3. **Model Graphs & ROC** — Inspect ROC curves, Precision-Recall curves, Confusion Matrices, and classification reports across Random Forest, KNN, Decision Tree, and Logistic Regression.
+4. **Live Fraud Predictor** — Test single transactions with instant presets (`[ 📋 Fill Legit Sample ]` and `[ ⚠️ Fill Fraud Sample ]`) and live probability gauge.
+5. **Model Benchmarks** — Train single or all classifiers with side-by-side performance comparison.
 
 ---
 
 ## Architecture Notes
 
-- **`frontend.py`** — All Streamlit pages, navigation, charts, tables, and forms. Calls functions from `backend.py` to retrieve results.
-- **`backend.py`** — All data processing and ML logic. No Streamlit imports; can be tested independently.
-- Trained models are saved to the `models/` directory using Joblib and reloaded automatically.
-- Session state is used to pass data between pages without re-running computations.
+- **`frontend/`** — React 19 + Vite modern client with InsightHub rounded glassmorphism aesthetic.
+- **`main.py`** — FastAPI REST API endpoints (`/api/dashboard`, `/api/dataset/upload`, `/api/models/graphs`, `/api/train`, `/api/predict`).
+- **`backend.py`** — Core machine learning pipelines: preprocessing, data balancing, training, evaluation, and prediction.
+- Trained models are cached in-memory and serialized via Joblib for instant inference.
 
 ---
 
