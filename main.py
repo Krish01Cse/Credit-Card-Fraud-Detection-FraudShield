@@ -255,6 +255,16 @@ def get_presets():
     }
 
 
+@app.get("/api/transactions/samples")
+def get_transaction_samples(
+    category: Optional[str] = Query(None, description="Optional category filter"),
+    query: Optional[str] = Query(None, description="Search term for merchant, tag, or description"),
+):
+    """Returns curated legitimate and fraudulent transaction lists with full metadata and vectors."""
+    return backend.get_sample_transactions(category=category, query=query)
+
+
+
 @app.get("/api/models")
 def get_models():
     ensure_data_and_models()
