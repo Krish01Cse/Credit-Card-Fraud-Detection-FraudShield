@@ -1133,6 +1133,22 @@ body {
   border-color: #0f172a;
 }
 
+/* Empty State for Filtered Transactions */
+.tx-empty-state {
+  text-align: center;
+  padding: 2.2rem 1rem;
+  background: #f8fafc;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  color: #64748b;
+  font-size: 0.82rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+
 
 
 
