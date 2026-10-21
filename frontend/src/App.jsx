@@ -1480,6 +1480,30 @@ export default function App() {
                       )}
                     </div>
                   )}
+
+                  {/* ── Sub-Section: Authentic Transaction Sample Repository ── */}
+                  <div className="sample-tx-section">
+                    <div className="sample-tx-header">
+                      <div className="sample-tx-title">
+                        <span>📋</span>
+                        <span>Authentic Transaction Catalog</span>
+                      </div>
+                      <div className="sample-tabs-bar">
+                        <button
+                          className={`sample-tab-btn ${sampleTab === 'fraud' ? 'active fraud' : ''}`}
+                          onClick={() => setSampleTab('fraud')}
+                        >
+                          <span>⚠️ Fraud ({sampleTxData.fraud_transactions?.length || 5})</span>
+                        </button>
+                        <button
+                          className={`sample-tab-btn ${sampleTab === 'legit' ? 'active legit' : ''}`}
+                          onClick={() => setSampleTab('legit')}
+                        >
+                          <span>✓ Legit ({sampleTxData.legit_transactions?.length || 5})</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div style={{ fontSize: '0.72rem', color: '#94a3b8', textAlign: 'center', paddingTop: '1rem', borderTop: '1px solid #f1f5f9' }}>
