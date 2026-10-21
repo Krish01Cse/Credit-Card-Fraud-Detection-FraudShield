@@ -62,6 +62,13 @@ export default function App() {
   const [graphData, setGraphData] = useState(null);
   const [graphLoading, setGraphLoading] = useState(false);
 
+  // Sample Transactions List State (Right-hand panel below Live Verdict)
+  const [sampleTxData, setSampleTxData] = useState({ legit_transactions: [], fraud_transactions: [] });
+  const [sampleTab, setSampleTab] = useState('fraud'); // 'fraud' or 'legit'
+  const [sampleCategory, setSampleCategory] = useState('All');
+  const [sampleSearch, setSampleSearch] = useState('');
+  const [sampleLoading, setSampleLoading] = useState(false);
+
   // Prediction Form State
   const [transaction, setTransaction] = useState({
     Amount: 149.62,
