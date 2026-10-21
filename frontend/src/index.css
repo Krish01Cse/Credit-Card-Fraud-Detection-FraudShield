@@ -927,4 +927,31 @@ body {
   margin-top: 1.2rem;
 }
 
+/* Sample Transactions Section in Live Predictor */
+.sample-tx-section {
+  margin-top: 1.35rem;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 1.25rem 1.45rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.sample-tx-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.85rem;
+}
+
+.sample-tx-title {
+  font-size: 0.96rem;
+  font-weight: 700;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+
 
