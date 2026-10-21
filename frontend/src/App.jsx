@@ -1538,7 +1538,26 @@ export default function App() {
                     </div>
 
                     {/* Fraud Transactions List */}
-                    {sampleTab === 'fraud' && (
+                    {sampleTab === 'fraud' && (sampleTxData.fraud_transactions || []).length === 0 && (
+                      <div className="tx-empty-state">
+                        <span style={{ fontSize: '1.5rem' }}>🔍</span>
+                        <strong>No fraud samples match your search criteria</strong>
+                        <p style={{ margin: 0, fontSize: '0.74rem' }}>Try clearing the search or choosing another category.</p>
+                        <button
+                          className="btn-outline"
+                          style={{ marginTop: '0.4rem', fontSize: '0.72rem', padding: '0.25rem 0.65rem' }}
+                          onClick={() => {
+                            setSampleSearch('');
+                            setSampleCategory('All');
+                            fetchSampleTransactions('All', '');
+                          }}
+                        >
+                          Reset Filters
+                        </button>
+                      </div>
+                    )}
+
+                    {sampleTab === 'fraud' && (sampleTxData.fraud_transactions || []).length > 0 && (
                       <div className="tx-card-list">
                         {(sampleTxData.fraud_transactions || []).map((tx) => (
                           <div
@@ -1589,7 +1608,26 @@ export default function App() {
                     )}
 
                     {/* Legitimate Transactions List */}
-                    {sampleTab === 'legit' && (
+                    {sampleTab === 'legit' && (sampleTxData.legit_transactions || []).length === 0 && (
+                      <div className="tx-empty-state">
+                        <span style={{ fontSize: '1.5rem' }}>🔍</span>
+                        <strong>No legitimate samples match your search criteria</strong>
+                        <p style={{ margin: 0, fontSize: '0.74rem' }}>Try clearing the search or choosing another category.</p>
+                        <button
+                          className="btn-outline"
+                          style={{ marginTop: '0.4rem', fontSize: '0.72rem', padding: '0.25rem 0.65rem' }}
+                          onClick={() => {
+                            setSampleSearch('');
+                            setSampleCategory('All');
+                            fetchSampleTransactions('All', '');
+                          }}
+                        >
+                          Reset Filters
+                        </button>
+                      </div>
+                    )}
+
+                    {sampleTab === 'legit' && (sampleTxData.legit_transactions || []).length > 0 && (
                       <div className="tx-card-list">
                         {(sampleTxData.legit_transactions || []).map((tx) => (
                           <div
