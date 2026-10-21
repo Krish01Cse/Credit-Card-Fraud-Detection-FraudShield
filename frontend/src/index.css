@@ -953,5 +953,45 @@ body {
   gap: 0.45rem;
 }
 
+.sample-tabs-bar {
+  display: flex;
+  gap: 0.5rem;
+  background: #f1f5f9;
+  padding: 0.3rem;
+  border-radius: 10px;
+}
+
+.sample-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.42rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sample-tab-btn:hover {
+  color: #0f172a;
+}
+
+.sample-tab-btn.active.legit {
+  background: #ffffff;
+  color: #059669;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+
+.sample-tab-btn.active.fraud {
+  background: #ffffff;
+  color: #dc2626;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+
+
 
 
