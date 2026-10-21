@@ -292,6 +292,12 @@ export default function App() {
     setTransaction(tx.features);
     setPresetType(tx.badge_color === 'danger' ? 'fraud' : 'legit');
     runPrediction(tx.features, selectedModel);
+
+    // Smooth scroll to verdict card if needed
+    const verdictEl = document.getElementById('verdict-display-card');
+    if (verdictEl && window.innerWidth < 1024) {
+      verdictEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
   };
 
   // Handle Amount Shortcut
@@ -1426,7 +1432,7 @@ export default function App() {
               </div>
 
               {/* Right Column: Live Detection Verdict */}
-              <div className="content-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div id="verdict-display-card" className="content-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div>
                   <h3 style={{ marginBottom: '1rem' }}>🎯 Live Anomaly Verdict</h3>
 
