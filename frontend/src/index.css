@@ -1021,6 +1021,13 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+.tx-sample-card.active-selected {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 1.5px #2563eb;
+}
+
+
 .tx-sample-left {
   display: flex;
   align-items: center;

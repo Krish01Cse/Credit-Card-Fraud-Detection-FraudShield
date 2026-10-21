@@ -68,6 +68,7 @@ export default function App() {
   const [sampleCategory, setSampleCategory] = useState('All');
   const [sampleSearch, setSampleSearch] = useState('');
   const [sampleLoading, setSampleLoading] = useState(false);
+  const [activeLoadedTxId, setActiveLoadedTxId] = useState(null);
 
   // Prediction Form State
   const [transaction, setTransaction] = useState({
@@ -287,6 +288,7 @@ export default function App() {
   // Click-to-load a specific transaction sample from the list
   const handleSelectSampleTransaction = (tx) => {
     if (!tx || !tx.features) return;
+    setActiveLoadedTxId(tx.id);
     setTransaction(tx.features);
     setPresetType(tx.badge_color === 'danger' ? 'fraud' : 'legit');
     runPrediction(tx.features, selectedModel);
@@ -1541,7 +1543,7 @@ export default function App() {
                         {(sampleTxData.fraud_transactions || []).map((tx) => (
                           <div
                             key={tx.id}
-                            className="tx-sample-card"
+                            className={`tx-sample-card ${activeLoadedTxId === tx.id ? 'active-selected' : ''}`}
                             onClick={() => handleSelectSampleTransaction(tx)}
                             title="Click to load transaction into inspector and evaluate risk"
                           >
@@ -1592,7 +1594,7 @@ export default function App() {
                         {(sampleTxData.legit_transactions || []).map((tx) => (
                           <div
                             key={tx.id}
-                            className="tx-sample-card"
+                            className={`tx-sample-card ${activeLoadedTxId === tx.id ? 'active-selected' : ''}`}
                             onClick={() => handleSelectSampleTransaction(tx)}
                             title="Click to load transaction into inspector and evaluate risk"
                           >
