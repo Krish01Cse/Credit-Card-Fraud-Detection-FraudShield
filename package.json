@@ -1,0 +1,10 @@
+{
+  "name": "credit-card-fraud-detection-fraudshield",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "start": "bash run.sh",
+    "build": "npm --prefix frontend run build"
+  }
+}
