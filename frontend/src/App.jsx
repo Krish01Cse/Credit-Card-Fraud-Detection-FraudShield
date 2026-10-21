@@ -114,10 +114,32 @@ export default function App() {
     }
   };
 
+  // Fetch Sample Transactions (Legitimate and Fraudulent)
+  const fetchSampleTransactions = async (category = sampleCategory, query = sampleSearch) => {
+    setSampleLoading(true);
+    try {
+      let url = `${API_BASE}/transactions/samples?`;
+      if (category && category !== 'All') {
+        url += `category=${encodeURIComponent(category)}&`;
+      }
+      if (query && query.trim()) {
+        url += `query=${encodeURIComponent(query.trim())}&`;
+      }
+      const res = await fetch(url);
+      const data = await res.json();
+      setSampleTxData(data);
+    } catch (err) {
+      console.error('Failed to fetch sample transactions:', err);
+    } finally {
+      setSampleLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchDashboard();
     runPrediction(transaction, selectedModel);
     fetchModelGraphs(graphModel);
+    fetchSampleTransactions();
   }, []);
 
   // Handle Model Graph Tab Switch
