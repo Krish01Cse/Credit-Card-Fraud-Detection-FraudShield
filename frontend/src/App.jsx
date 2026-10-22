@@ -20,7 +20,10 @@ import {
   FileSpreadsheet,
   ArrowRight,
   Play,
-  X
+  X,
+  Sun,
+  Moon,
+  Sparkles
 } from 'lucide-react';
 
 const API_BASE = 'http://localhost:8000/api';
@@ -35,6 +38,20 @@ const formatPct = (val) => {
 };
 
 export default function App() {
+  // Dark / Light Theme State with localStorage persistence
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('fraudshield_theme') || 'light';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('fraudshield_theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+  };
+
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [dashboardData, setDashboardData] = useState(null);
   const [modelsData, setModelsData] = useState([]);
