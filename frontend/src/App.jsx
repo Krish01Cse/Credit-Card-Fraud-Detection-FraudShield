@@ -88,6 +88,18 @@ export default function App() {
   const [sampleLoading, setSampleLoading] = useState(false);
   const [activeLoadedTxId, setActiveLoadedTxId] = useState(null);
 
+  // Data Cleaning & Preprocessing Studio State
+  const [cleaningReport, setCleaningReport] = useState(null);
+  const [cleaningLoading, setCleaningLoading] = useState(false);
+  const [cleaningActionLoading, setCleaningActionLoading] = useState(false);
+  const [cleaningFeedback, setCleaningFeedback] = useState(null);
+  const [cleaningOptions, setCleaningOptions] = useState({
+    imputation_strategy: 'median',
+    outlier_action: 'clip',
+    scaler_type: 'standard',
+    deduplicate: true,
+  });
+
   // Prediction Form State
   const [transaction, setTransaction] = useState({
     Amount: 149.62,
@@ -159,6 +171,7 @@ export default function App() {
     runPrediction(transaction, selectedModel);
     fetchModelGraphs(graphModel);
     fetchSampleTransactions();
+    fetchCleaningReport();
   }, []);
 
   // Handle Model Graph Tab Switch
@@ -264,10 +277,53 @@ export default function App() {
       });
       fetchDashboard();
       fetchModelGraphs(graphModel);
+      fetchCleaningReport();
     } catch (err) {
       setUploadStatus({ type: 'error', message: `❌ Demo load failed: ${err.message}` });
     } finally {
       setUploadLoading(false);
+    }
+  };
+
+  // Fetch Data Cleaning Audit Report
+  const fetchCleaningReport = async (scaler = cleaningOptions.scaler_type, outlier = cleaningOptions.outlier_action) => {
+    setCleaningLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/dataset/cleaning-report?scaler_type=${scaler}&outlier_action=${outlier}`);
+      const data = await res.json();
+      if (res.ok && data.report) {
+        setCleaningReport(data.report);
+      }
+    } catch (err) {
+      console.error('Failed to fetch cleaning report:', err);
+    } finally {
+      setCleaningLoading(false);
+    }
+  };
+
+  // Run Automated Cleaning Pipeline
+  const handleRunCleaning = async () => {
+    setCleaningActionLoading(true);
+    setCleaningFeedback({ type: 'info', message: 'Applying deduplication, missing imputation, and IQR scaling pipeline...' });
+    try {
+      const res = await fetch(`${API_BASE}/dataset/clean`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cleaningOptions),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Cleaning execution failed');
+
+      setCleaningReport(data.updated_report);
+      setCleaningFeedback({ type: 'success', message: `✅ ${data.message}` });
+      if (data.eval_results) {
+        setModelsData(data.eval_results);
+      }
+      fetchDashboard();
+    } catch (err) {
+      setCleaningFeedback({ type: 'error', message: `❌ Cleaning failed: ${err.message}` });
+    } finally {
+      setCleaningActionLoading(false);
     }
   };
 
@@ -394,6 +450,20 @@ export default function App() {
               <div className="nav-left">
                 <Database size={18} />
                 <span>Dataset &amp; Upload</span>
+              </div>
+              <ChevronRight size={14} className="nav-chevron" />
+            </button>
+
+            <button
+              className={`nav-item ${currentTab === 'cleaning' ? 'active' : ''}`}
+              onClick={() => {
+                setCurrentTab('cleaning');
+                fetchCleaningReport();
+              }}
+            >
+              <div className="nav-left">
+                <Sparkles size={18} />
+                <span>Data Cleaning Studio</span>
               </div>
               <ChevronRight size={14} className="nav-chevron" />
             </button>
