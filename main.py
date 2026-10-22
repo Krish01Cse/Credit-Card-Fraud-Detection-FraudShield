@@ -89,6 +89,13 @@ class PredictRequest(BaseModel):
     transaction: Dict[str, float]
 
 
+class CleanDatasetRequest(BaseModel):
+    imputation_strategy: Optional[str] = "median"
+    outlier_action: Optional[str] = "clip"
+    scaler_type: Optional[str] = "standard"
+    deduplicate: Optional[bool] = True
+
+
 LEGIT_PRESET = {
     "Amount": 149.62,
     "Time": 406.0,
@@ -457,3 +464,71 @@ def predict_endpoint(req: PredictRequest):
         }
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/api/dataset/cleaning-report")
+def get_dataset_cleaning_report(
+    scaler_type: Optional[str] = "standard",
+    outlier_action: Optional[str] = "clip"
+):
+    """Returns comprehensive data cleaning, outlier, and imbalance audit."""
+    ensure_data_and_models()
+    df = STATE["df"]
+    if df is None:
+        raise HTTPException(status_code=400, detail="No active dataset found.")
+    report = backend.get_comprehensive_cleaning_report(df, scaler_name=scaler_type, outlier_action=outlier_action)
+    return {
+        "dataset_name": STATE["dataset_filename"],
+        "report": report,
+    }
+
+
+@app.post("/api/dataset/clean")
+def run_dataset_cleaning(req: CleanDatasetRequest):
+    """Applies automated data cleaning, updates active dataset, and re-fits scalers."""
+    ensure_data_and_models()
+    df = STATE["df"]
+    if df is None:
+        raise HTTPException(status_code=400, detail="No active dataset to clean.")
+
+    cleaned_df, summary = backend.apply_data_cleaning_pipeline(
+        df,
+        imputation_strategy=req.imputation_strategy or "median",
+        outlier_action=req.outlier_action or "clip",
+        scaler_type=req.scaler_type or "standard",
+        deduplicate=True if req.deduplicate is None else req.deduplicate,
+    )
+
+    # Re-preprocess and update state
+    X_tr, X_te, y_tr, y_te, scl, f_names = backend.preprocess_data(
+        cleaned_df,
+        scaler_type=req.scaler_type or "standard",
+        outlier_action=req.outlier_action or "clip",
+    )
+    STATE["df"] = cleaned_df
+    STATE["X_train"] = X_tr
+    STATE["X_test"] = X_te
+    STATE["y_train"] = y_tr
+    STATE["y_test"] = y_te
+    STATE["scaler"] = scl
+    STATE["feature_names"] = f_names
+
+    # Retrain active models automatically
+    STATE["eval_results"] = []
+    for name in backend.CLASSIFIER_DEFINITIONS:
+        m = backend.train_model(name, X_tr, y_tr)
+        STATE["trained_models"][name] = m
+        res = backend.evaluate_model(m, X_te, y_te, name)
+        STATE["eval_results"].append(res)
+    STATE["eval_results"].sort(key=lambda r: r["f1"], reverse=True)
+
+    updated_report = backend.get_comprehensive_cleaning_report(cleaned_df, scaler_name=req.scaler_type, outlier_action=req.outlier_action)
+
+    return {
+        "success": True,
+        "message": f"Successfully cleaned dataset! {summary['duplicates_dropped']} duplicates removed, {summary['missing_cells_imputed']} nulls imputed, {summary['outliers_clipped']} outliers treated.",
+        "summary": summary,
+        "updated_report": updated_report,
+        "eval_results": STATE["eval_results"],
+    }
+
