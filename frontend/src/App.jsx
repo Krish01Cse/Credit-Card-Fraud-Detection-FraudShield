@@ -812,13 +812,46 @@ export default function App() {
               </div>
             )}
 
+            {/* Quick Link to Data Cleaning Studio */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '0.85rem 1.25rem',
+                background: 'var(--primary-light)',
+                border: '1px solid rgba(56, 189, 248, 0.3)',
+                borderRadius: 12,
+                marginBottom: '1.25rem',
+                flexWrap: 'wrap',
+                gap: '0.65rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <Sparkles size={18} color="var(--primary)" />
+                <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  New: Data Cleaning Studio available for deduplication, null imputation, and IQR outlier treatment.
+                </span>
+              </div>
+              <button
+                className="btn-outline"
+                style={{ fontSize: '0.74rem', padding: '0.3rem 0.75rem', fontWeight: 700, color: 'var(--primary)' }}
+                onClick={() => {
+                  setCurrentTab('cleaning');
+                  fetchCleaningReport();
+                }}
+              >
+                Open Cleaning Studio →
+              </button>
+            </div>
+
             {/* Dataset Upload Area */}
             <div className="content-card" style={{ marginBottom: '1.35rem' }}>
-              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.35rem', color: '#0f172a' }}>
+              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.35rem', color: 'var(--text-primary)' }}>
                 📂 Step 1: Upload Custom CSV Dataset
               </h4>
-              <p style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: '1rem' }}>
-                File must include standard European credit card features: <code>Time</code>, <code>Amount</code>, PCA vectors <code>V1–V28</code>, and target label <code>Class</code> (0 = Legit, 1 = Fraud).
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                Supports standard European credit card datasets (<code>Time</code>, <code>Amount</code>, <code>V1–V28</code>, <code>Class</code>) and custom datasets with <code>is_fraud</code>, <code>amt</code>, or raw numeric features (automatically adapted).
               </p>
 
               <label className="upload-dropzone" htmlFor="csv-file-input">
