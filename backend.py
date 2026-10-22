@@ -625,6 +625,82 @@ def get_comprehensive_cleaning_report(df, scaler_name="standard", outlier_action
     }
 
 
+def apply_data_cleaning_pipeline(
+    df: pd.DataFrame,
+    imputation_strategy: str = "median",
+    outlier_action: str = "clip",
+    scaler_type: str = "standard",
+    deduplicate: bool = True
+):
+    """
+    Applies the full end-to-end cleaning and preprocessing pipeline to df:
+      1. Deduplication: drops exact duplicate transactions if deduplicate is True.
+      2. Missing values: fills nulls using imputation_strategy (median, mean, or zero for numeric; mode for categorical).
+      3. Outlier handling: clips or removes values exceeding 1.5 * IQR on Amount.
+      4. Returns (cleaned_df, cleaning_summary_dict).
+    """
+    if df is None or df.empty:
+        return df, {}
+
+    df_clean = df.copy()
+    original_rows = len(df_clean)
+    orig_fraud = int((df_clean["Class"] == 1).sum()) if "Class" in df_clean.columns else 0
+
+    # 1. Deduplication
+    dups_dropped = 0
+    if deduplicate:
+        before_dup = len(df_clean)
+        df_clean.drop_duplicates(inplace=True)
+        dups_dropped = before_dup - len(df_clean)
+
+    # 2. Missing value imputation
+    missing_cells_imputed = int(df_clean.isnull().sum().sum())
+    if missing_cells_imputed > 0:
+        for col in df_clean.columns:
+            if df_clean[col].isnull().any():
+                if pd.api.types.is_numeric_dtype(df_clean[col]):
+                    if imputation_strategy == "mean":
+                        fill_val = df_clean[col].mean()
+                    elif imputation_strategy == "zero":
+                        fill_val = 0.0
+                    else:  # default median
+                        fill_val = df_clean[col].median()
+                    df_clean[col].fillna(fill_val, inplace=True)
+                else:
+                    mode_val = df_clean[col].mode()
+                    fill_val = mode_val[0] if not mode_val.empty else "Unknown"
+                    df_clean[col].fillna(fill_val, inplace=True)
+
+    # 3. Outlier handling on Amount
+    outliers_clipped = 0
+    if outlier_action == "clip" and "Amount" in df_clean.columns and pd.api.types.is_numeric_dtype(df_clean["Amount"]):
+        q1 = df_clean["Amount"].quantile(0.25)
+        q3 = df_clean["Amount"].quantile(0.75)
+        iqr = q3 - q1
+        upper_limit = q3 + 1.5 * iqr
+        outlier_mask = df_clean["Amount"] > upper_limit
+        outliers_clipped = int(outlier_mask.sum())
+        df_clean["Amount"] = df_clean["Amount"].clip(upper=upper_limit)
+
+    final_rows = len(df_clean)
+    final_fraud = int((df_clean["Class"] == 1).sum()) if "Class" in df_clean.columns else 0
+
+    summary = {
+        "original_rows": original_rows,
+        "final_rows": final_rows,
+        "duplicates_dropped": dups_dropped,
+        "missing_cells_imputed": missing_cells_imputed,
+        "outliers_clipped": outliers_clipped,
+        "scaler_type": scaler_type,
+        "imputation_strategy": imputation_strategy,
+        "outlier_action": outlier_action,
+        "fraud_rate_before": round(orig_fraud / max(1, original_rows) * 100, 3),
+        "fraud_rate_after": round(final_fraud / max(1, final_rows) * 100, 3),
+    }
+
+    return df_clean, summary
+
+
 # ---------------------------------------------------------------------------
 # Preprocessing
 # ---------------------------------------------------------------------------
