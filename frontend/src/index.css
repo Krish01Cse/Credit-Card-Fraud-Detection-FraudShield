@@ -357,6 +357,41 @@ body {
   background: #edf2f7;
 }
 
+/* Theme Toggle Button */
+.theme-toggle-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f59e0b;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-sm);
+}
+
+.theme-toggle-btn:hover {
+  transform: rotate(18deg) scale(1.06);
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+}
+
+[data-theme='dark'] .theme-toggle-btn {
+  background: #1e293b;
+  border-color: #334155;
+  color: #38bdf8;
+}
+
+[data-theme='dark'] .theme-toggle-btn:hover {
+  transform: rotate(-18deg) scale(1.06);
+  box-shadow: 0 4px 14px rgba(56, 189, 248, 0.3);
+  border-color: #38bdf8;
+}
+
 .badge-dot {
   position: absolute;
   top: 6px;
