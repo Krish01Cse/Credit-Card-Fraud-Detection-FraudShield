@@ -504,48 +504,178 @@ def get_dataset_summary(df):
     }
 
 
+def get_comprehensive_cleaning_report(df, scaler_name="standard", outlier_action="clip"):
+    """
+    Computes an end-to-end Data Cleaning and Preprocessing Audit:
+      1. Missing Value Analysis per column (null count, %, imputation strategy)
+      2. Duplicate Records identification (exact copies count and percentage)
+      3. Outlier Detection via IQR on Amount and Time (Q1, Q3, IQR, bounds, outlier counts)
+      4. Class Imbalance Analytics (legit vs fraud count, ratio, class weights)
+      5. Stratified 80/20 Train-Test Splitting breakdown (Train count, Test count, Stratified Fraud rates)
+      6. Theoretical SMOTE Resampling balance preview
+      7. Raw vs Cleaned sample preview (first 5 rows before/after transformation)
+    """
+    if df is None or df.empty:
+        return {}
+
+    total_rows = len(df)
+    duplicates = int(df.duplicated().sum())
+
+    # 1. Missing values analysis
+    missing_counts = df.isnull().sum()
+    missing_list = []
+    for col, count in missing_counts.items():
+        if count > 0:
+            missing_list.append({
+                "column": col,
+                "missing_count": int(count),
+                "missing_percentage": round(float(count) / total_rows * 100, 3),
+                "dtype": str(df[col].dtype),
+                "strategy": "Median Imputation" if pd.api.types.is_numeric_dtype(df[col]) else "Mode Imputation",
+            })
+
+    # 2. Outlier Analysis via IQR for Amount and Time
+    outlier_stats = {}
+    for col in ["Amount", "Time"]:
+        if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
+            s = df[col].dropna()
+            q1 = float(s.quantile(0.25))
+            q3 = float(s.quantile(0.75))
+            iqr = q3 - q1
+            upper_bound = float(q3 + 1.5 * iqr)
+            lower_bound = float(max(0.0, q1 - 1.5 * iqr))
+            outlier_count = int(((s > upper_bound) | (s < lower_bound)).sum())
+            outlier_stats[col] = {
+                "q1": round(q1, 2),
+                "q3": round(q3, 2),
+                "iqr": round(iqr, 2),
+                "upper_bound": round(upper_bound, 2),
+                "lower_bound": round(lower_bound, 2),
+                "outlier_count": outlier_count,
+                "outlier_pct": round(outlier_count / total_rows * 100, 2) if total_rows > 0 else 0.0,
+                "max_value": round(float(s.max()), 2) if not s.empty else 0.0,
+                "mean_value": round(float(s.mean()), 2) if not s.empty else 0.0,
+            }
+
+    # 3. Class Imbalance Analytics
+    class_series = df["Class"] if "Class" in df.columns else pd.Series([0])
+    total_fraud = int((class_series == 1).sum())
+    total_legit = int((class_series == 0).sum())
+    fraud_pct = round(total_fraud / total_rows * 100, 3) if total_rows > 0 else 0.0
+    imbalance_ratio = f"{round(total_legit / max(1, total_fraud), 1)}:1"
+
+    # 4. Stratified 80/20 Train/Test Split projections
+    train_size = int(round(total_rows * 0.8))
+    test_size = total_rows - train_size
+    train_fraud = int(round(total_fraud * 0.8))
+    test_fraud = total_fraud - train_fraud
+    train_legit = train_size - train_fraud
+    test_legit = test_size - test_fraud
+
+    stratified_split = {
+        "train_total": train_size,
+        "train_legit": train_legit,
+        "train_fraud": train_fraud,
+        "train_fraud_rate": round(train_fraud / max(1, train_size) * 100, 3),
+        "test_total": test_size,
+        "test_legit": test_legit,
+        "test_fraud": test_fraud,
+        "test_fraud_rate": round(test_fraud / max(1, test_size) * 100, 3),
+        "method": "Stratified K-Fold / ShuffleSplit (80/20 train-test ratio preserving fraud incidence)",
+    }
+
+    # 5. SMOTE Simulation Projection
+    smote_projection = {
+        "pre_smote_legit": train_legit,
+        "pre_smote_fraud": train_fraud,
+        "post_smote_legit": train_legit,
+        "post_smote_fraud": train_legit,  # Balanced 50:50
+        "synthetic_fraud_samples_generated": max(0, train_legit - train_fraud),
+        "description": "Synthetic Minority Over-sampling Technique (SMOTE) generates synthetic fraud feature vectors by interpolating between nearest minority class neighbors.",
+    }
+
+    # 6. Raw vs Cleaned Sample Preview (first 5 rows)
+    raw_sample = df.head(5).to_dict(orient="records")
+    # Simulate cleaned sample
+    df_preview = df.copy().drop_duplicates().dropna()
+    if outlier_action == "clip" and "Amount" in df_preview.columns and "Amount" in outlier_stats:
+        ub = outlier_stats["Amount"]["upper_bound"]
+        df_preview["Amount"] = df_preview["Amount"].clip(upper=ub)
+    cleaned_sample = df_preview.head(5).to_dict(orient="records")
+
+    return {
+        "total_rows": total_rows,
+        "duplicate_rows": duplicates,
+        "duplicate_pct": round(duplicates / total_rows * 100, 2) if total_rows > 0 else 0.0,
+        "missing_columns_count": len(missing_list),
+        "missing_details": missing_list,
+        "outlier_stats": outlier_stats,
+        "class_imbalance": {
+            "total_legit": total_legit,
+            "total_fraud": total_fraud,
+            "fraud_percentage": fraud_pct,
+            "imbalance_ratio": imbalance_ratio,
+        },
+        "stratified_split": stratified_split,
+        "smote_projection": smote_projection,
+        "raw_sample": raw_sample,
+        "cleaned_sample": cleaned_sample,
+        "scaler_used": "RobustScaler (IQR-based, resilient to fraud spikes)" if scaler_name == "robust" else "StandardScaler (Z-Score zero-mean unit-variance)",
+        "features_count": df.shape[1] - 1 if "Class" in df.columns else df.shape[1],
+    }
+
+
 # ---------------------------------------------------------------------------
 # Preprocessing
 # ---------------------------------------------------------------------------
 
-def preprocess_data(df, test_size=0.2, random_state=42):
+def preprocess_data(df, test_size=0.2, random_state=42, scaler_type="standard", outlier_action="clip"):
     """
     Clean, scale, and split the dataset.
 
     Cleaning steps applied (in order):
       1. Drop exact duplicate rows.
-      2. Drop rows with any missing values.
-      3. Separate features from target ('Class').
-      4. Stratified train/test split (preserves fraud ratio).
-      5. Fit StandardScaler on TRAINING data only, then transform both sets.
-         (Fitting on test data would cause data leakage.)
-
-    Returns:
-        X_train, X_test, y_train, y_test, fitted_scaler, feature_names (list)
+      2. Drop rows with any missing values (or impute).
+      3. Handle extreme amount outliers via IQR clipping if specified.
+      4. Separate features from target ('Class').
+      5. Stratified train/test split (preserves fraud ratio).
+      6. Fit scaler (StandardScaler or RobustScaler) on TRAINING data only, then transform both sets.
     """
     df = df.copy()
 
-    # Step 1 & 2: clean
-    before = len(df)
+    # Step 1: drop duplicates
     df.drop_duplicates(inplace=True)
-    df.dropna(inplace=True)
-    after = len(df)
 
-    # Step 3: separate
-    target_col   = "Class"
+    # Step 2: drop remaining missing values
+    df.dropna(inplace=True)
+
+    # Step 3: outlier clipping if requested
+    if outlier_action == "clip" and "Amount" in df.columns and pd.api.types.is_numeric_dtype(df["Amount"]):
+        q3 = df["Amount"].quantile(0.75)
+        q1 = df["Amount"].quantile(0.25)
+        iqr = q3 - q1
+        upper_limit = q3 + 1.5 * iqr
+        df["Amount"] = df["Amount"].clip(upper=upper_limit)
+
+    # Step 4: separate features and target
+    target_col = "Class"
     feature_cols = [c for c in df.columns if c != target_col]
     X = df[feature_cols].values
     y = df[target_col].values
 
-    # Step 4: stratified split
+    # Step 5: stratified split
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=random_state, stratify=y
     )
 
-    # Step 5: scale — fit ONLY on training data
-    scaler = StandardScaler()
+    # Step 6: scale — fit ONLY on training data
+    if scaler_type == "robust":
+        scaler = RobustScaler()
+    else:
+        scaler = StandardScaler()
+
     X_train = scaler.fit_transform(X_train)
-    X_test  = scaler.transform(X_test)   # transform only, never fit
+    X_test = scaler.transform(X_test)
 
     os.makedirs(MODEL_DIR, exist_ok=True)
     joblib.dump(scaler, SCALER_PATH)
