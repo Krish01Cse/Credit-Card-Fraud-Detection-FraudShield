@@ -1174,6 +1174,96 @@ body {
   gap: 0.45rem;
 }
 
+/* ==========================================================================
+   Dark Theme Component Enhancements
+   ========================================================================== */
+[data-theme='dark'] .content-card,
+[data-theme='dark'] .stat-card,
+[data-theme='dark'] .alert-banner,
+[data-theme='dark'] .sidebar-projects-box,
+[data-theme='dark'] .tx-sample-card,
+[data-theme='dark'] .tx-empty-state,
+[data-theme='dark'] .search-input-box,
+[data-theme='dark'] .header-btn,
+[data-theme='dark'] .btn-outline {
+  background: var(--bg-card);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+[data-theme='dark'] .greeting-text h2,
+[data-theme='dark'] .alert-text h4,
+[data-theme='dark'] .card-title-left h3,
+[data-theme='dark'] .stat-value,
+[data-theme='dark'] .task-meta h5,
+[data-theme='dark'] .tx-sample-meta h5,
+[data-theme='dark'] .param-group label {
+  color: var(--text-primary);
+}
+
+[data-theme='dark'] .card-subtitle,
+[data-theme='dark'] .alert-text p,
+[data-theme='dark'] .task-meta p,
+[data-theme='dark'] .tx-sample-meta p,
+[data-theme='dark'] .projects-tree-items {
+  color: var(--text-secondary);
+}
+
+[data-theme='dark'] .task-item {
+  background: var(--bg-card);
+  border-color: var(--border);
+}
+
+[data-theme='dark'] .task-item:hover,
+[data-theme='dark'] .tx-sample-card:hover {
+  background: var(--bg-hover);
+  border-color: #475569;
+}
+
+[data-theme='dark'] .tx-sample-card.active-selected {
+  border-color: var(--primary);
+  background: rgba(56, 189, 248, 0.08);
+}
+
+[data-theme='dark'] .tx-filter-chip {
+  background: var(--bg-card);
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+[data-theme='dark'] .tx-filter-chip.active {
+  background: var(--primary);
+  color: #0f172a;
+  border-color: var(--primary);
+  font-weight: 700;
+}
+
+[data-theme='dark'] .tx-search-input {
+  background: var(--bg-card);
+  border-color: var(--border);
+}
+
+[data-theme='dark'] .tx-search-input input {
+  color: var(--text-primary);
+}
+
+[data-theme='dark'] input[type="text"],
+[data-theme='dark'] input[type="number"],
+[data-theme='dark'] select {
+  background: #0f172a;
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+[data-theme='dark'] .param-slider-container {
+  background: #0f172a;
+  border-color: var(--border);
+}
+
+[data-theme='dark'] .badge-dot {
+  border-color: var(--bg-canvas);
+}
+
 
 
 
