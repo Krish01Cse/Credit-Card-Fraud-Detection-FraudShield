@@ -1320,6 +1320,76 @@ export default function App() {
                 </div>
               </div>
             </div>
+
+            {/* Outlier Detection via IQR & Feature Scaling Card */}
+            <div className="content-card" style={{ marginBottom: '1.25rem' }}>
+              <div className="card-header-row">
+                <div className="card-title-left">
+                  <span style={{ color: 'var(--primary)' }}>📊</span>
+                  <h3>Outlier Analysis &amp; Feature Scaling (IQR Rule)</h3>
+                </div>
+                <span className="badge badge-blue">Tukey's Fences (1.5 × IQR)</span>
+              </div>
+              <p className="card-subtitle">
+                Detection of heavy-tailed fraudulent amount spikes and evaluation of scaling resiliency.
+              </p>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
+                {/* Amount Outlier Box */}
+                <div style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)', borderRadius: 12, padding: '1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+                    <h5 style={{ fontSize: '0.86rem', fontWeight: 700, margin: 0 }}>Transaction Amount Outliers</h5>
+                    <span className="badge badge-red" style={{ fontSize: '0.68rem' }}>
+                      {cleaningReport?.outlier_stats?.Amount?.outlier_count || 0} Outliers ({cleaningReport?.outlier_stats?.Amount?.outlier_pct || 0}%)
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.75rem' }}>
+                    <div style={{ padding: '0.45rem', background: 'var(--bg-card)', borderRadius: 6 }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Q1 (25th Pct): </span>
+                      <strong>${cleaningReport?.outlier_stats?.Amount?.q1 || '0.00'}</strong>
+                    </div>
+                    <div style={{ padding: '0.45rem', background: 'var(--bg-card)', borderRadius: 6 }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Q3 (75th Pct): </span>
+                      <strong>${cleaningReport?.outlier_stats?.Amount?.q3 || '0.00'}</strong>
+                    </div>
+                    <div style={{ padding: '0.45rem', background: 'var(--bg-card)', borderRadius: 6 }}>
+                      <span style={{ color: 'var(--text-muted)' }}>IQR Spread: </span>
+                      <strong>${cleaningReport?.outlier_stats?.Amount?.iqr || '0.00'}</strong>
+                    </div>
+                    <div style={{ padding: '0.45rem', background: 'var(--bg-card)', borderRadius: 6 }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Upper Bound: </span>
+                      <strong style={{ color: 'var(--danger)' }}>${cleaningReport?.outlier_stats?.Amount?.upper_bound || '0.00'}</strong>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: '0.65rem', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    Values &gt; ${cleaningReport?.outlier_stats?.Amount?.upper_bound || 0} are identified as anomalous amount spikes.
+                  </div>
+                </div>
+
+                {/* Feature Scaling Info Box */}
+                <div style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)', borderRadius: 12, padding: '1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+                    <h5 style={{ fontSize: '0.86rem', fontWeight: 700, margin: 0 }}>Active Normalization Strategy</h5>
+                    <span className="badge badge-blue" style={{ fontSize: '0.68rem' }}>No Data Leakage</span>
+                  </div>
+
+                  <div style={{ padding: '0.65rem', background: 'var(--bg-card)', borderRadius: 8, marginBottom: '0.65rem' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--primary)', marginBottom: '0.2rem' }}>
+                      {cleaningReport?.scaler_used || 'StandardScaler'}
+                    </div>
+                    <p style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', margin: 0 }}>
+                      Fitted exclusively on <code>X_train</code> and applied onto <code>X_test</code> to prevent data snooping bias.
+                    </p>
+                  </div>
+
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <span>✓</span>
+                    <span>Standardized 28 PCA dimensions (V1 to V28) centered at mean zero.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
