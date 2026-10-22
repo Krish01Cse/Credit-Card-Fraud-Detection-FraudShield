@@ -497,6 +497,14 @@ export default function App() {
               <Search size={15} color="#94a3b8" />
               <input type="text" placeholder="Search transaction ID, hash, card..." />
             </div>
+            <button
+              className="theme-toggle-btn"
+              onClick={toggleTheme}
+              title={`Switch to ${theme === 'light' ? 'Dark' : 'Light'} Theme`}
+              aria-label="Toggle theme mode"
+            >
+              {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
+            </button>
             <div className="header-btn" title="Settings">
               <Settings size={17} />
             </div>
