@@ -1042,6 +1042,185 @@ export default function App() {
           </div>
         )}
 
+        {/* ── VIEW: DATA CLEANING & PREPROCESSING STUDIO ── */}
+        {currentTab === 'cleaning' && (
+          <div>
+            {/* Header Title Row */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Sparkles size={22} color="var(--primary)" />
+                  Data Cleaning &amp; Preprocessing Studio
+                </h3>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  Automated duplicate deduplication, missing value imputation, IQR outlier treatment, and stratified 80/20 splitting.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.65rem' }}>
+                <button
+                  className="btn-outline"
+                  onClick={() => fetchCleaningReport()}
+                  disabled={cleaningLoading}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem' }}
+                >
+                  <RotateCw size={14} className={cleaningLoading ? 'spin-anim' : ''} />
+                  Refresh Audit
+                </button>
+                <button
+                  className="btn-blue"
+                  onClick={handleRunCleaning}
+                  disabled={cleaningActionLoading}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.82rem' }}
+                >
+                  <Play size={14} />
+                  {cleaningActionLoading ? 'Cleaning Dataset...' : 'Run Automated Cleaning'}
+                </button>
+              </div>
+            </div>
+
+            {/* Cleaning Feedback Banner */}
+            {cleaningFeedback && (
+              <div
+                style={{
+                  padding: '0.85rem 1.25rem',
+                  borderRadius: 12,
+                  marginBottom: '1.2rem',
+                  background: cleaningFeedback.type === 'error' ? 'var(--danger-light)' : 'var(--success-light)',
+                  border: `1px solid ${cleaningFeedback.type === 'error' ? '#fca5a5' : '#86efac'}`,
+                  color: cleaningFeedback.type === 'error' ? 'var(--danger)' : 'var(--success)',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <span>{cleaningFeedback.message}</span>
+                <button
+                  onClick={() => setCleaningFeedback(null)}
+                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit' }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+
+            {/* Executive Pipeline Audit Cards */}
+            <div className="metrics-grid">
+              <div className="stat-card">
+                <span className="stat-label">Total Transactions</span>
+                <div className="stat-value" style={{ margin: '0.35rem 0' }}>
+                  {cleaningReport?.total_rows ? cleaningReport.total_rows.toLocaleString() : activeDatasetInfo.total_rows.toLocaleString()}
+                </div>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Raw input rows</span>
+              </div>
+
+              <div className="stat-card">
+                <span className="stat-label">Duplicate Records</span>
+                <div className="stat-value" style={{ margin: '0.35rem 0', color: cleaningReport?.duplicate_rows > 0 ? 'var(--warning)' : 'var(--success)' }}>
+                  {cleaningReport?.duplicate_rows !== undefined ? cleaningReport.duplicate_rows : 0}
+                </div>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                  {cleaningReport?.duplicate_pct ? `${cleaningReport.duplicate_pct}% duplicate incidence` : '0% redundancy'}
+                </span>
+              </div>
+
+              <div className="stat-card">
+                <span className="stat-label">Missing Value Columns</span>
+                <div className="stat-value" style={{ margin: '0.35rem 0', color: cleaningReport?.missing_columns_count > 0 ? 'var(--danger)' : 'var(--success)' }}>
+                  {cleaningReport?.missing_columns_count !== undefined ? cleaningReport.missing_columns_count : 0}
+                </div>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                  {cleaningReport?.missing_columns_count > 0 ? 'Imputation recommended' : '100% complete schema'}
+                </span>
+              </div>
+
+              <div className="stat-card">
+                <span className="stat-label">Class Imbalance Ratio</span>
+                <div className="stat-value" style={{ margin: '0.35rem 0', color: 'var(--primary)' }}>
+                  {cleaningReport?.class_imbalance?.imbalance_ratio || '49.0:1'}
+                </div>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                  {cleaningReport?.class_imbalance?.fraud_percentage ? `${cleaningReport.class_imbalance.fraud_percentage}% fraud incidence` : 'Extreme class skew'}
+                </span>
+              </div>
+            </div>
+
+            {/* Pipeline Configuration Control Box */}
+            <div className="content-card" style={{ marginBottom: '1.25rem' }}>
+              <div className="card-header-row" style={{ marginBottom: '0.65rem' }}>
+                <div className="card-title-left">
+                  <span style={{ color: 'var(--primary)' }}>⚙️</span>
+                  <h3>Automated Preprocessing Engine Controls</h3>
+                </div>
+                <span className="badge badge-blue">Production Pipeline</span>
+              </div>
+              <p className="card-subtitle">
+                Customize data cleaning operations prior to training classifiers. Changes apply immediately upon running pipeline.
+              </p>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
+                <div className="param-group">
+                  <label>Missing Value Strategy</label>
+                  <select
+                    value={cleaningOptions.imputation_strategy}
+                    onChange={(e) => setCleaningOptions({ ...cleaningOptions, imputation_strategy: e.target.value })}
+                  >
+                    <option value="median">Median Imputation (Robust to outliers)</option>
+                    <option value="mean">Mean Imputation (Standard distribution)</option>
+                    <option value="zero">Zero Imputation (Conservative null fill)</option>
+                  </select>
+                </div>
+
+                <div className="param-group">
+                  <label>Amount Outlier Treatment</label>
+                  <select
+                    value={cleaningOptions.outlier_action}
+                    onChange={(e) => {
+                      setCleaningOptions({ ...cleaningOptions, outlier_action: e.target.value });
+                      fetchCleaningReport(cleaningOptions.scaler_type, e.target.value);
+                    }}
+                  >
+                    <option value="clip">IQR Clipping (Cap at 1.5 × IQR Upper Bound)</option>
+                    <option value="keep">Keep Extreme Values (Natural distributions)</option>
+                  </select>
+                </div>
+
+                <div className="param-group">
+                  <label>Feature Scaling Algorithm</label>
+                  <select
+                    value={cleaningOptions.scaler_type}
+                    onChange={(e) => {
+                      setCleaningOptions({ ...cleaningOptions, scaler_type: e.target.value });
+                      fetchCleaningReport(e.target.value, cleaningOptions.outlier_action);
+                    }}
+                  >
+                    <option value="standard">StandardScaler (Zero-mean, unit variance)</option>
+                    <option value="robust">RobustScaler (Median &amp; IQR scaling)</option>
+                  </select>
+                </div>
+
+                <div className="param-group">
+                  <label>Duplicate Handling</label>
+                  <div style={{ display: 'flex', alignItems: 'center', height: '38px', gap: '0.5rem' }}>
+                    <input
+                      type="checkbox"
+                      id="dedupCheck"
+                      checked={cleaningOptions.deduplicate}
+                      onChange={(e) => setCleaningOptions({ ...cleaningOptions, deduplicate: e.target.checked })}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                    />
+                    <label htmlFor="dedupCheck" style={{ fontSize: '0.8rem', cursor: 'pointer', margin: 0 }}>
+                      Drop exact duplicate transactions
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── VIEW 3: MODEL GRAPHS & ROC / PR CURVES (WITH ACCURACY, PRECISION, RECALL, F1 FOR EACH MODEL) ── */}
         {currentTab === 'graphs' && (
           <div>
