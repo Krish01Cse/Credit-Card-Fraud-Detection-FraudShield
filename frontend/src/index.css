@@ -1299,6 +1299,77 @@ body {
   border-color: var(--bg-canvas);
 }
 
+/* Dark Mode Chart, Matrix, and Dropzone Tokens */
+[data-theme='dark'] .svg-graph-box {
+  background: #0f172a;
+  border-radius: 12px;
+}
+
+[data-theme='dark'] .svg-graph-box line[stroke="#f1f5f9"] {
+  stroke: #1e293b;
+}
+
+[data-theme='dark'] .svg-graph-box line[stroke="#e2e8f0"] {
+  stroke: #334155;
+}
+
+[data-theme='dark'] .graph-card {
+  background: var(--bg-card);
+  border-color: var(--border);
+}
+
+[data-theme='dark'] .graph-card-header h4 {
+  color: var(--text-primary);
+}
+
+[data-theme='dark'] .cm-cell {
+  border-color: #334155;
+}
+
+[data-theme='dark'] .cm-cell.tn {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+}
+
+[data-theme='dark'] .cm-cell.tp {
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+}
+
+[data-theme='dark'] .cm-cell.fp,
+[data-theme='dark'] .cm-cell.fn {
+  background: rgba(248, 113, 113, 0.12);
+  color: #f87171;
+}
+
+[data-theme='dark'] .upload-dropzone {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+[data-theme='dark'] .upload-dropzone:hover {
+  background: #1e293b;
+  border-color: var(--primary);
+}
+
+[data-theme='dark'] .upload-icon-circle {
+  background: #1e293b;
+  color: var(--primary);
+}
+
+[data-theme='dark'] .pill-btn {
+  background: #1e293b;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+[data-theme='dark'] .pill-btn.active {
+  background: var(--primary);
+  color: #0f172a;
+  font-weight: 700;
+  border-color: var(--primary);
+}
+
 
 
 
