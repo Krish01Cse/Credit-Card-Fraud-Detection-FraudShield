@@ -99,6 +99,7 @@ export default function App() {
     scaler_type: 'standard',
     deduplicate: true,
   });
+  const [previewMode, setPreviewMode] = useState('cleaned');
 
   // Prediction Form State
   const [transaction, setTransaction] = useState({
@@ -1471,6 +1472,70 @@ export default function App() {
                     ✨ Projected Synthetic Fraud Samples: +{cleaningReport?.smote_projection?.synthetic_fraud_samples_generated?.toLocaleString() || '1,920'} vectors
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Raw vs Cleaned Data Preview Comparator Table */}
+            <div className="content-card">
+              <div className="card-header-row">
+                <div className="card-title-left">
+                  <span style={{ color: 'var(--primary)' }}>📋</span>
+                  <h3>Transaction Vector Inspection (First 5 Rows)</h3>
+                </div>
+                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                  <button
+                    className={`btn-outline ${previewMode === 'cleaned' ? 'active' : ''}`}
+                    style={{ fontSize: '0.72rem', padding: '0.28rem 0.65rem', background: previewMode === 'cleaned' ? 'var(--primary)' : 'transparent', color: previewMode === 'cleaned' ? '#ffffff' : 'inherit' }}
+                    onClick={() => setPreviewMode('cleaned')}
+                  >
+                    Cleaned &amp; Preprocessed
+                  </button>
+                  <button
+                    className={`btn-outline ${previewMode === 'raw' ? 'active' : ''}`}
+                    style={{ fontSize: '0.72rem', padding: '0.28rem 0.65rem', background: previewMode === 'raw' ? 'var(--primary)' : 'transparent', color: previewMode === 'raw' ? '#ffffff' : 'inherit' }}
+                    onClick={() => setPreviewMode('raw')}
+                  >
+                    Raw Input
+                  </button>
+                </div>
+              </div>
+              <p className="card-subtitle">
+                Inspect before-and-after transaction matrices reflecting normalization, null imputation, and PCA alignment.
+              </p>
+
+              <div style={{ overflowX: 'auto', marginTop: '0.85rem' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.74rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                      <th style={{ padding: '0.5rem' }}>Row</th>
+                      <th style={{ padding: '0.5rem' }}>Time</th>
+                      <th style={{ padding: '0.5rem' }}>Amount</th>
+                      <th style={{ padding: '0.5rem' }}>V1</th>
+                      <th style={{ padding: '0.5rem' }}>V2</th>
+                      <th style={{ padding: '0.5rem' }}>V3</th>
+                      <th style={{ padding: '0.5rem' }}>V4</th>
+                      <th style={{ padding: '0.5rem' }}>Class</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {((previewMode === 'cleaned' ? cleaningReport?.cleaned_sample : cleaningReport?.raw_sample) || []).map((row, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '0.5rem', fontWeight: 700, color: 'var(--text-muted)' }}>#{idx + 1}</td>
+                        <td style={{ padding: '0.5rem' }}>{typeof row.Time === 'number' ? row.Time.toFixed(1) : row.Time}</td>
+                        <td style={{ padding: '0.5rem', fontWeight: 600 }}>${typeof row.Amount === 'number' ? row.Amount.toFixed(2) : row.Amount}</td>
+                        <td style={{ padding: '0.5rem' }}>{typeof row.V1 === 'number' ? row.V1.toFixed(4) : row.V1}</td>
+                        <td style={{ padding: '0.5rem' }}>{typeof row.V2 === 'number' ? row.V2.toFixed(4) : row.V2}</td>
+                        <td style={{ padding: '0.5rem' }}>{typeof row.V3 === 'number' ? row.V3.toFixed(4) : row.V3}</td>
+                        <td style={{ padding: '0.5rem' }}>{typeof row.V4 === 'number' ? row.V4.toFixed(4) : row.V4}</td>
+                        <td style={{ padding: '0.5rem' }}>
+                          <span className={`badge ${row.Class === 1 || row.Class === '1' ? 'badge-red' : 'badge-green'}`} style={{ fontSize: '0.65rem' }}>
+                            {row.Class === 1 || row.Class === '1' ? '⚠️ Fraud (1)' : '✓ Legit (0)'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
