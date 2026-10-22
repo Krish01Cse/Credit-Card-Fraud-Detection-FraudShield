@@ -64,6 +64,11 @@ export default function App() {
   // Dataset Upload & Training State
   const [uploadStatus, setUploadStatus] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadManifest, setUploadManifest] = useState(null);
+  const [showMappingModal, setShowMappingModal] = useState(false);
+  const [manualMapping, setManualMapping] = useState({ Amount: '', Time: '', Class: '' });
+  const [batchInferenceResult, setBatchInferenceResult] = useState(null);
+  const [batchInferenceLoading, setBatchInferenceLoading] = useState(false);
   const [datasetModelToTrain, setDatasetModelToTrain] = useState('all');
   const [realtimeTrainingResult, setRealtimeTrainingResult] = useState(null);
   const [activeDatasetInfo, setActiveDatasetInfo] = useState({
@@ -221,7 +226,8 @@ export default function App() {
     formData.append('file', file);
 
     setUploadLoading(true);
-    setUploadStatus({ type: 'info', message: `Uploading and preprocessing ${file.name}...` });
+    setUploadStatus({ type: 'info', message: `Uploading, validating, and auto-cleaning ${file.name}...` });
+    setBatchInferenceResult(null);
 
     try {
       const res = await fetch(`${API_BASE}/dataset/upload`, {
@@ -234,26 +240,104 @@ export default function App() {
         throw new Error(data.detail || 'Upload failed');
       }
 
+      setUploadManifest(data);
+
+      if (data.status === 'needs_mapping') {
+        setShowMappingModal(true);
+        setManualMapping({
+          Amount: data.column_mapping?.detected_mapping?.Amount || '',
+          Time: data.column_mapping?.detected_mapping?.Time || '',
+          Class: data.column_mapping?.detected_mapping?.Class || '',
+        });
+        setUploadStatus({
+          type: 'warning',
+          message: `⚠️ Ambiguous column detected in '${data.filename}'. Please confirm the column mappings below.`,
+        });
+        return;
+      }
+
       setActiveDatasetInfo({
         filename: data.filename,
         total_rows: data.total_rows,
-        legit_rows: data.legit_rows,
-        fraud_rows: data.fraud_rows,
-        fraud_percentage: data.fraud_percentage,
-        features_count: data.features_count,
+        legit_rows: data.legit_rows || 0,
+        fraud_rows: data.fraud_rows || 0,
+        fraud_percentage: data.fraud_percentage || 0,
+        features_count: data.features_count || 30,
       });
 
-      setUploadStatus({
-        type: 'success',
-        message: `✅ Dataset '${data.filename}' successfully loaded (${data.total_rows.toLocaleString()} transactions, ${data.fraud_rows} frauds detected). Training ${datasetModelToTrain === 'all' ? 'all models' : datasetModelToTrain} in real-time...`,
-      });
-
-      // Automatically trigger real-time training on the selected model
-      await handleTrain(datasetModelToTrain);
+      if (data.status === 'unlabeled_inference_only') {
+        setUploadStatus({
+          type: 'warning',
+          message: `⚠️ Unlabeled Dataset Loaded: '${data.filename}' contains ${data.total_rows.toLocaleString()} transactions but no fraud target label ('Class'). Supervised model retraining requires labeled examples, but you can immediately run Batch Fraud Inference!`,
+        });
+      } else {
+        setUploadStatus({
+          type: 'success',
+          message: `✅ Dataset '${data.filename}' successfully validated & sanitized (${data.total_rows.toLocaleString()} transactions, ${data.fraud_rows || 0} frauds detected). Select a model below to train.`,
+        });
+      }
     } catch (err) {
       setUploadStatus({ type: 'error', message: `❌ ${err.message}` });
+      setUploadManifest(null);
     } finally {
       setUploadLoading(false);
+    }
+  };
+
+  // Apply Manual Column Mapping
+  const handleApplyMapping = async () => {
+    setUploadLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/dataset/apply-mapping`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mapping: manualMapping,
+          imputation_strategy: 'median',
+          outlier_action: 'clip',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Mapping failed');
+
+      setUploadManifest(data);
+      setShowMappingModal(false);
+      setActiveDatasetInfo({
+        filename: data.filename,
+        total_rows: data.total_rows,
+        legit_rows: data.legit_rows || 0,
+        fraud_rows: data.fraud_rows || 0,
+        fraud_percentage: data.fraud_percentage || 0,
+        features_count: data.features_count || 30,
+      });
+      setUploadStatus({
+        type: 'success',
+        message: `✅ Column mapping applied! Cleaned ${data.total_rows.toLocaleString()} transactions. Ready to train models.`,
+      });
+    } catch (err) {
+      setUploadStatus({ type: 'error', message: `❌ Mapping error: ${err.message}` });
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
+  // Batch Inference on Active Dataset (especially useful for Scenario F: unlabeled datasets)
+  const handleBatchInference = async (modelName) => {
+    setBatchInferenceLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/dataset/batch-predict`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model_name: modelName || 'Random Forest' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Batch inference failed');
+      setBatchInferenceResult(data);
+    } catch (err) {
+      alert(`Batch inference error: ${err.message}`);
+    } finally {
+      setBatchInferenceLoading(false);
     }
   };
 
@@ -890,6 +974,332 @@ export default function App() {
                 </button>
               </div>
             </div>
+
+            {/* Interactive Column Mapping Interface (Scenario E & Manual Override) */}
+            {(showMappingModal || uploadManifest?.status === 'needs_mapping') && (
+              <div className="manifest-card" style={{ border: '2px solid var(--primary)', background: 'var(--surface)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Settings size={18} color="var(--primary)" />
+                    <h4 style={{ fontSize: '0.98rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                      🔧 Intelligent Column Mapping Configuration
+                    </h4>
+                  </div>
+                  {uploadManifest?.status !== 'needs_mapping' && (
+                    <button
+                      className="btn-outline"
+                      style={{ padding: '0.25rem 0.6rem', fontSize: '0.72rem' }}
+                      onClick={() => setShowMappingModal(false)}
+                    >
+                      <X size={14} /> Close
+                    </button>
+                  )}
+                </div>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.9rem' }}>
+                  FraudShield detected the column structure below. You can confirm or override the column bindings for your dataset:
+                </p>
+
+                <div className="mapping-select-grid">
+                  <div className="mapping-field-box">
+                    <label>Transaction Amount (Amount / amt):</label>
+                    <select
+                      value={manualMapping.Amount}
+                      onChange={(e) => setManualMapping({ ...manualMapping, Amount: e.target.value })}
+                    >
+                      <option value="">-- Auto-Detect Amount --</option>
+                      {uploadManifest?.available_columns?.map((col) => (
+                        <option key={`amt-${col}`} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="mapping-field-box">
+                    <label>Fraud Indicator / Target (Class / is_fraud):</label>
+                    <select
+                      value={manualMapping.Class}
+                      onChange={(e) => setManualMapping({ ...manualMapping, Class: e.target.value })}
+                    >
+                      <option value="">-- Auto-Detect Target (Class) --</option>
+                      <option value="__unlabeled__">None (Unlabeled Dataset for Inference Only)</option>
+                      {uploadManifest?.available_columns?.map((col) => (
+                        <option key={`cls-${col}`} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="mapping-field-box">
+                    <label>Transaction Time / Step (Time / unix_time):</label>
+                    <select
+                      value={manualMapping.Time}
+                      onChange={(e) => setManualMapping({ ...manualMapping, Time: e.target.value })}
+                    >
+                      <option value="">-- Auto-Detect Time --</option>
+                      {uploadManifest?.available_columns?.map((col) => (
+                        <option key={`time-${col}`} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.65rem', marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid var(--border)' }}>
+                  {uploadManifest?.status !== 'needs_mapping' && (
+                    <button
+                      className="btn-outline"
+                      style={{ fontSize: '0.78rem', padding: '0.45rem 1rem' }}
+                      onClick={() => setShowMappingModal(false)}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  <button
+                    className="btn-blue"
+                    style={{ fontSize: '0.78rem', padding: '0.45rem 1.25rem', fontWeight: 700 }}
+                    onClick={handleApplyMapping}
+                    disabled={uploadLoading}
+                  >
+                    {uploadLoading ? <RotateCw className="animate-spin" size={14} /> : 'Apply Column Mapping & Clean'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Executive Upload & Validation Health Manifest */}
+            {uploadManifest && (
+              <div className="manifest-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.9rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                    <FileSpreadsheet size={20} color="var(--primary)" />
+                    <div>
+                      <h4 style={{ fontSize: '0.98rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                        Dataset Ingestion &amp; Health Audit: {uploadManifest.filename}
+                      </h4>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
+                        Status: <strong style={{ color: uploadManifest.status === 'unlabeled_inference_only' ? '#d97706' : '#16a34a' }}>
+                          {uploadManifest.status === 'unlabeled_inference_only' ? 'Unlabeled Dataset (Inference Mode)' : 'Sanitized & Fully Compatible'}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    className="btn-outline"
+                    style={{ fontSize: '0.74rem', padding: '0.35rem 0.8rem', fontWeight: 700 }}
+                    onClick={() => setShowMappingModal(true)}
+                  >
+                    🔧 Custom Column Mapping
+                  </button>
+                </div>
+
+                {/* 4 Health Metrics */}
+                <div className="manifest-grid">
+                  <div className="manifest-metric-box">
+                    <div className="label">Transactions Cleaned</div>
+                    <div className="val">{uploadManifest.total_rows?.toLocaleString()}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                      from {uploadManifest.sanitization_summary?.original_rows?.toLocaleString()} raw rows
+                    </div>
+                  </div>
+
+                  <div className="manifest-metric-box">
+                    <div className="label">Empty Rows &amp; Cols Stripped</div>
+                    <div className="val" style={{ color: '#0284c7' }}>
+                      {uploadManifest.sanitization_summary?.empty_rows_removed || 0}r / {uploadManifest.sanitization_summary?.empty_cols_removed || 0}c
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                      completely blank cells purged
+                    </div>
+                  </div>
+
+                  <div className="manifest-metric-box">
+                    <div className="label">Duplicates Dropped</div>
+                    <div className="val" style={{ color: '#d97706' }}>
+                      {uploadManifest.sanitization_summary?.duplicate_rows_removed || 0}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                      redundant records removed
+                    </div>
+                  </div>
+
+                  <div className="manifest-metric-box">
+                    <div className="label">Missing Cells Handled</div>
+                    <div className="val" style={{ color: '#16a34a' }}>
+                      {uploadManifest.sanitization_summary?.missing_cells_detected || 0}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                      safely median-imputed
+                    </div>
+                  </div>
+                </div>
+
+                {/* Column Mapping Badges */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '0.9rem', padding: '0.75rem', background: 'var(--background)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                  <span style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                    Detected Schema Mappings:
+                  </span>
+                  <span className="mapping-badge">
+                    Amount: <strong>{uploadManifest.column_mapping?.detected_mapping?.Amount || 'Amount'}</strong>
+                  </span>
+                  <span className="mapping-badge">
+                    Class: <strong>{uploadManifest.column_mapping?.detected_mapping?.Class || 'None (Unlabeled)'}</strong>
+                  </span>
+                  <span className="mapping-badge">
+                    Time: <strong>{uploadManifest.column_mapping?.detected_mapping?.Time || 'Time'}</strong>
+                  </span>
+                  {uploadManifest.column_mapping?.unmapped_columns?.length > 0 && (
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                      ({uploadManifest.column_mapping.unmapped_columns.length} non-model column(s) preserved in preview: {uploadManifest.column_mapping.unmapped_columns.slice(0, 3).join(', ')}{uploadManifest.column_mapping.unmapped_columns.length > 3 ? '...' : ''})
+                    </span>
+                  )}
+                </div>
+
+                {/* Unlabeled Mode Notice (Scenario F) */}
+                {uploadManifest.status === 'unlabeled_inference_only' && (
+                  <div style={{ padding: '0.95rem 1.15rem', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: 'var(--radius-md)', marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontWeight: 800, fontSize: '0.86rem', color: '#b45309' }}>
+                          <AlertTriangle size={17} /> Unlabeled Dataset (Scenario F: Inference-Ready)
+                        </div>
+                        <p style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                          This dataset does not contain historical fraud labels ('Class'). Supervised model training is disabled, but you can run instant Batch Fraud Inference across all {uploadManifest.total_rows?.toLocaleString()} transactions using your active model.
+                        </p>
+                      </div>
+                      <button
+                        className="btn-blue"
+                        style={{ fontSize: '0.78rem', padding: '0.5rem 1.15rem', fontWeight: 700, background: '#d97706', borderColor: '#b45309' }}
+                        onClick={() => handleBatchInference(datasetModelToTrain === 'all' ? 'Random Forest' : datasetModelToTrain)}
+                        disabled={batchInferenceLoading}
+                      >
+                        {batchInferenceLoading ? <RotateCw className="animate-spin" size={15} /> : <Play size={15} />}
+                        <span>Run Batch Fraud Inference</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Cleaned Data Preview Table */}
+                {uploadManifest.preview?.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
+                      Cleaned Dataset Sample (First {uploadManifest.preview.length} Rows):
+                    </div>
+                    <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
+                      <table style={{ width: '100%', fontSize: '0.74rem', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--background)', borderBottom: '1px solid var(--border)' }}>
+                            {Object.keys(uploadManifest.preview[0]).map((header) => (
+                              <th key={`hdr-${header}`} style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                {header}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {uploadManifest.preview.map((row, rIdx) => (
+                            <tr key={`prow-${rIdx}`} style={{ borderBottom: '1px solid var(--border)' }}>
+                              {Object.entries(row).map(([k, val], cIdx) => (
+                                <td key={`pcell-${rIdx}-${cIdx}`} style={{ padding: '0.45rem 0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                                  {k === 'Class' ? (
+                                    <span className={`badge ${val === 1 ? 'badge-danger' : 'badge-success'}`}>
+                                      {val === 1 ? '1 (Fraud)' : '0 (Legit)'}
+                                    </span>
+                                  ) : (
+                                    typeof val === 'number' ? val.toFixed(3) : String(val ?? '—')
+                                  )}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Batch Inference Results Card */}
+            {batchInferenceResult && (
+              <div className="manifest-card" style={{ border: '2px solid #3b82f6' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <ShieldCheck size={20} color="#2563eb" />
+                    <h4 style={{ fontSize: '0.98rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                      Batch Inference Results ({batchInferenceResult.model_name})
+                    </h4>
+                  </div>
+                  <span className="badge badge-blue">
+                    Scanned {batchInferenceResult.total_scanned?.toLocaleString()} Transactions
+                  </span>
+                </div>
+
+                <div className="manifest-grid">
+                  <div className="manifest-metric-box">
+                    <div className="label">Total Scanned</div>
+                    <div className="val">{batchInferenceResult.total_scanned?.toLocaleString()}</div>
+                  </div>
+                  <div className="manifest-metric-box">
+                    <div className="label">Flagged Fraud</div>
+                    <div className="val" style={{ color: '#ef4444' }}>
+                      {batchInferenceResult.predicted_fraud_count} ({batchInferenceResult.predicted_fraud_percentage}%)
+                    </div>
+                  </div>
+                  <div className="manifest-metric-box">
+                    <div className="label">High Risk (&ge;70%)</div>
+                    <div className="val" style={{ color: '#dc2626' }}>
+                      {batchInferenceResult.risk_breakdown?.high || 0}
+                    </div>
+                  </div>
+                  <div className="manifest-metric-box">
+                    <div className="label">Minimal Risk (&lt;20%)</div>
+                    <div className="val" style={{ color: '#16a34a' }}>
+                      {batchInferenceResult.risk_breakdown?.low || 0}
+                    </div>
+                  </div>
+                </div>
+
+                {batchInferenceResult.flagged_transactions?.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.45rem' }}>
+                      Top Flagged High-Risk Transactions:
+                    </div>
+                    <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
+                      <table style={{ width: '100%', fontSize: '0.74rem', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--background)', borderBottom: '1px solid var(--border)' }}>
+                            <th style={{ padding: '0.5rem 0.75rem' }}>Rank</th>
+                            <th style={{ padding: '0.5rem 0.75rem' }}>Row #</th>
+                            <th style={{ padding: '0.5rem 0.75rem' }}>Amount</th>
+                            <th style={{ padding: '0.5rem 0.75rem' }}>Time</th>
+                            <th style={{ padding: '0.5rem 0.75rem' }}>Fraud Probability</th>
+                            <th style={{ padding: '0.5rem 0.75rem' }}>Verdict</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {batchInferenceResult.flagged_transactions.slice(0, 8).map((tx) => (
+                            <tr key={`flag-${tx.row_index}`} style={{ borderBottom: '1px solid var(--border)' }}>
+                              <td style={{ padding: '0.45rem 0.75rem', fontWeight: 700 }}>#{tx.rank}</td>
+                              <td style={{ padding: '0.45rem 0.75rem' }}>Row {tx.row_index}</td>
+                              <td style={{ padding: '0.45rem 0.75rem', fontWeight: 700 }}>${tx.amount.toFixed(2)}</td>
+                              <td style={{ padding: '0.45rem 0.75rem' }}>{tx.time.toFixed(1)}s</td>
+                              <td style={{ padding: '0.45rem 0.75rem' }}>
+                                <strong style={{ color: tx.fraud_probability >= 70 ? '#ef4444' : '#d97706' }}>
+                                  {tx.fraud_probability}%
+                                </strong>
+                              </td>
+                              <td style={{ padding: '0.45rem 0.75rem' }}>
+                                <span className={`badge ${tx.prediction === 1 ? 'badge-danger' : 'badge-success'}`}>
+                                  {tx.label}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Step 2: Select Model to Train on the Dataset */}
             <div className="content-card" style={{ marginBottom: '1.35rem' }}>
