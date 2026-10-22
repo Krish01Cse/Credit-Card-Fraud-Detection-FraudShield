@@ -1218,6 +1218,108 @@ export default function App() {
                 </div>
               </div>
             </div>
+
+            {/* Two-Column Split: Missing Values Audit & Deduplication Engine */}
+            <div className="columns-split" style={{ marginBottom: '1.25rem' }}>
+              {/* Left Column: Missing Value Audit Table */}
+              <div className="content-card">
+                <div className="card-header-row">
+                  <div className="card-title-left">
+                    <span style={{ color: 'var(--primary)' }}>🔍</span>
+                    <h3>Missing Values Audit</h3>
+                  </div>
+                  <span className={`badge ${cleaningReport?.missing_columns_count > 0 ? 'badge-red' : 'badge-green'}`}>
+                    {cleaningReport?.missing_columns_count > 0 ? `${cleaningReport.missing_columns_count} Columns Flagged` : '0 Nulls Detected'}
+                  </span>
+                </div>
+                <p className="card-subtitle">
+                  Column-level completeness verification and automated imputation strategy.
+                </p>
+
+                {(!cleaningReport?.missing_details || cleaningReport.missing_details.length === 0) ? (
+                  <div style={{ background: 'var(--success-light)', border: '1px solid #86efac', borderRadius: 12, padding: '1.25rem', textAlign: 'center', marginTop: '0.85rem' }}>
+                    <div style={{ fontSize: '1.5rem', marginBottom: '0.35rem' }}>✓</div>
+                    <strong style={{ color: 'var(--success)', fontSize: '0.88rem' }}>100% Complete Feature Vectors</strong>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0.25rem 0 0' }}>
+                      All {cleaningReport?.features_count || 30} columns have zero null cells. Data integrity verified for high-dimensional inference.
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ overflowX: 'auto', marginTop: '0.85rem' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                          <th style={{ padding: '0.5rem' }}>Feature</th>
+                          <th style={{ padding: '0.5rem' }}>Type</th>
+                          <th style={{ padding: '0.5rem' }}>Nulls</th>
+                          <th style={{ padding: '0.5rem' }}>Rate</th>
+                          <th style={{ padding: '0.5rem' }}>Strategy</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cleaningReport.missing_details.map((m) => (
+                          <tr key={m.column} style={{ borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '0.5rem', fontWeight: 600 }}>{m.column}</td>
+                            <td style={{ padding: '0.5rem', color: 'var(--text-muted)' }}>{m.dtype}</td>
+                            <td style={{ padding: '0.5rem', color: 'var(--danger)', fontWeight: 700 }}>{m.missing_count}</td>
+                            <td style={{ padding: '0.5rem' }}>{m.missing_percentage}%</td>
+                            <td style={{ padding: '0.5rem' }}>
+                              <span className="badge badge-blue" style={{ fontSize: '0.65rem' }}>{m.strategy}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Right Column: Deduplication Engine */}
+              <div className="content-card">
+                <div className="card-header-row">
+                  <div className="card-title-left">
+                    <span style={{ color: 'var(--primary)' }}>📑</span>
+                    <h3>Deduplication Engine</h3>
+                  </div>
+                  <span className="badge badge-blue">Exact Hash Matching</span>
+                </div>
+                <p className="card-subtitle">
+                  Prevents model overfitting by eliminating repeated transaction rows across cardholders.
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.85rem' }}>
+                  <div style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)', borderRadius: 10, padding: '0.75rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <h5 style={{ fontSize: '0.82rem', fontWeight: 700, margin: 0 }}>Exact Duplicate Rows</h5>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Redundant transaction copies</span>
+                    </div>
+                    <span style={{ fontSize: '1.1rem', fontWeight: 800, color: cleaningReport?.duplicate_rows > 0 ? 'var(--warning)' : 'var(--success)' }}>
+                      {cleaningReport?.duplicate_rows || 0}
+                    </span>
+                  </div>
+
+                  <div style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)', borderRadius: 10, padding: '0.75rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <h5 style={{ fontSize: '0.82rem', fontWeight: 700, margin: 0 }}>Deduplication Status</h5>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Auto-pruning on pipeline execution</span>
+                    </div>
+                    <span className="badge badge-green" style={{ fontSize: '0.7rem' }}>
+                      {cleaningOptions.deduplicate ? 'Enabled (Auto Drop)' : 'Disabled'}
+                    </span>
+                  </div>
+
+                  <div style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)', borderRadius: 10, padding: '0.75rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <h5 style={{ fontSize: '0.82rem', fontWeight: 700, margin: 0 }}>Unique Transactions Retained</h5>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Usable non-duplicate records</span>
+                    </div>
+                    <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--primary)' }}>
+                      {((cleaningReport?.total_rows || 2500) - (cleaningReport?.duplicate_rows || 0)).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
