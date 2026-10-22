@@ -665,11 +665,11 @@ def apply_data_cleaning_pipeline(
                         fill_val = 0.0
                     else:  # default median
                         fill_val = df_clean[col].median()
-                    df_clean[col].fillna(fill_val, inplace=True)
+                    df_clean[col] = df_clean[col].fillna(fill_val)
                 else:
                     mode_val = df_clean[col].mode()
                     fill_val = mode_val[0] if not mode_val.empty else "Unknown"
-                    df_clean[col].fillna(fill_val, inplace=True)
+                    df_clean[col] = df_clean[col].fillna(fill_val)
 
     # 3. Outlier handling on Amount
     outliers_clipped = 0
