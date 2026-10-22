@@ -6,8 +6,12 @@ All machine learning computations and data handling are contained here.
 The frontend (frontend.py) calls these functions to display results.
 """
 
+from __future__ import annotations
+
 import os
+import io
 import warnings
+from typing import Optional, Dict, Any, List, Tuple
 import numpy as np
 import pandas as pd
 import joblib
@@ -66,193 +70,683 @@ CLASSIFIER_DEFINITIONS = {
 # Dataset loading and validation
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Dataset loading, automated cleaning, intelligent column detection, and validation
+# ---------------------------------------------------------------------------
+
+STANDARD_FEATURE_NAMES = ["Time"] + [f"V{i}" for i in range(1, 29)] + ["Amount"]
 REQUIRED_COLUMNS = {"Time", "Amount", "Class"}
 
+AMOUNT_ALIASES = [
+    "amount", "amt", "transactionamount", "transaction_amount", "trans_amount",
+    "tx_amount", "txamount", "charge", "charge_amount", "val", "value",
+    "price", "cost", "payment_amount", "total_amount", "trans_amt"
+]
 
-def adapt_and_normalize_schema(df: pd.DataFrame):
+TIME_ALIASES = [
+    "time", "timestamp", "time_stamp", "unix_time", "trans_date_trans_time",
+    "step", "transaction_hour", "tx_time", "txtime", "datetime", "date",
+    "transaction_time", "tx_datetime", "trans_time"
+]
+
+CLASS_ALIASES = [
+    "class", "is_fraud", "isfraud", "fraud", "fraud_label", "target", "label",
+    "is_fraudulent", "fraudulent", "anomaly", "fraud_flag", "fraudulent_flag",
+    "fraud_indicator"
+]
+
+MISSING_VALUE_MARKERS = [
+    "", " ", "  ", "na", "n/a", "null", "none", "nan", "?", "-", "#n/a", "nil", "<null>", "undefined"
+]
+
+
+def parse_csv_bytes(contents: bytes) -> tuple[pd.DataFrame | None, str | None]:
     """
-    Intelligently inspects, normalizes, and adapts arbitrary credit card fraud datasets:
-      1. Resolves target column name variations: Class, is_fraud, isFraud, fraud, label, target.
-      2. Resolves amount column variations: Amount, amount, amt, transaction_amount.
-      3. Resolves time column variations: Time, time, unix_time, timestamp, trans_date_trans_time, step.
-      4. Normalizes target values to 0 (legitimate) and 1 (fraud).
-      5. Ensures presence of 28 feature components (V1-V28):
-         - If standard V1-V28 are present, preserves them intact.
-         - If absent, projects available numeric features using PCA into 28 standardized components V1-V28.
-    Returns (adapted_df, adaptation_log).
+    Robust CSV parser supporting multi-encoding fallbacks and malformed-line tolerance.
     """
-    if df is None or df.empty:
-        return df, []
+    if not contents or len(contents.strip()) == 0:
+        return None, "The uploaded file is empty (0 bytes)."
 
-    df_out = df.copy()
-    logs = []
+    encodings = ["utf-8", "utf-8-sig", "latin-1", "cp1252", "iso-8859-1"]
+    last_err = None
 
-    # Case-insensitive column map
-    col_map_lower = {str(c).lower().strip(): c for c in df_out.columns}
-
-    # 1. Target Column Normalization
-    target_col = None
-    target_candidates = ["class", "is_fraud", "isfraud", "fraud", "label", "target", "is_fraudulent", "fraud_label"]
-    for cand in target_candidates:
-        if cand in col_map_lower:
-            target_col = col_map_lower[cand]
+    for enc in encodings:
+        try:
+            df = pd.read_csv(
+                io.BytesIO(contents),
+                encoding=enc,
+                on_bad_lines="skip",
+                skipinitialspace=True,
+                na_values=MISSING_VALUE_MARKERS,
+                keep_default_na=True,
+            )
+            if df is not None and not df.empty:
+                return df, None
+        except UnicodeDecodeError as exc:
+            last_err = exc
+            continue
+        except Exception as exc:
+            last_err = exc
             break
 
-    if target_col and target_col != "Class":
-        df_out = df_out.rename(columns={target_col: "Class"})
-        logs.append(f"Mapped target column '{target_col}' -> 'Class'")
+    return None, f"Could not parse CSV file: {str(last_err) if last_err else 'Invalid CSV structure'}"
 
-    # Normalize target values (handle string '0'/'1', 'fraud'/'legit', True/False)
-    if "Class" in df_out.columns:
-        if df_out["Class"].dtype == object or df_out["Class"].dtype == bool:
-            str_map = {
-                "0": 0, "1": 1, 0: 0, 1: 1, 0.0: 0, 1.0: 1,
-                "legit": 0, "fraud": 1, "legitimate": 0, "fraudulent": 1,
-                "clean": 0, "anomaly": 1, True: 1, False: 0,
-                "true": 1, "false": 0, "yes": 1, "no": 0
-            }
-            mapped = df_out["Class"].astype(str).str.lower().map(str_map)
-            if mapped.notnull().sum() > 0:
-                df_out["Class"] = mapped.fillna(0).astype(int)
-                logs.append("Normalized target values to binary 0 (Legit) and 1 (Fraud)")
 
-    # 2. Amount Column Normalization
-    amount_col = None
-    amount_candidates = ["amount", "amt", "transaction_amount", "trans_amount", "charge_amount", "val", "value"]
-    for cand in amount_candidates:
-        if cand in col_map_lower:
-            amount_col = col_map_lower[cand]
-            break
+def clean_and_sanitize_raw_dataframe(df_raw: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    """
+    Foundational data cleaning on raw uploaded DataFrame:
+      1. Removes completely empty rows.
+      2. Removes completely empty columns.
+      3. Trims whitespace from all column names.
+      4. Cleans text cells: trims whitespace, standardizes missing markers as np.nan.
+      5. Parses numeric columns formatted as currency strings ($1,250.50, commas).
+      6. Drops exact duplicate rows (recording count).
+      7. Returns (cleaned_df, sanitization_summary).
+    """
+    if df_raw is None or df_raw.empty:
+        return df_raw, {
+            "original_rows": 0, "original_cols": 0, "cleaned_rows": 0, "cleaned_cols": 0,
+            "empty_rows_removed": 0, "empty_cols_removed": 0, "duplicate_rows_removed": 0,
+            "missing_cells_detected": 0, "cleaning_operations": ["Input dataframe is empty"]
+        }
 
-    if amount_col and amount_col != "Amount":
-        df_out = df_out.rename(columns={amount_col: "Amount"})
-        logs.append(f"Mapped transaction amount column '{amount_col}' -> 'Amount'")
+    df = df_raw.copy()
+    orig_rows = len(df)
+    orig_cols = len(df.columns)
+    operations = []
 
-    # 3. Time Column Normalization
-    time_col = None
-    time_candidates = ["time", "unix_time", "timestamp", "trans_date_trans_time", "step", "transaction_hour", "tx_time"]
-    for cand in time_candidates:
-        if cand in col_map_lower:
-            time_col = col_map_lower[cand]
-            break
+    # 1. Trim whitespace from column names
+    df.columns = [str(c).strip() for c in df.columns]
 
-    if time_col and time_col != "Time":
-        # If datetime string, convert to numeric seconds or timestamp
-        if df_out[time_col].dtype == object:
-            try:
-                dt_series = pd.to_datetime(df_out[time_col], errors="coerce")
-                df_out["Time"] = (dt_series - dt_series.min()).dt.total_seconds().fillna(0)
-                logs.append(f"Converted datetime column '{time_col}' to elapsed seconds in 'Time'")
-            except Exception:
-                df_out = df_out.rename(columns={time_col: "Time"})
-                logs.append(f"Mapped '{time_col}' -> 'Time'")
+    # 2. Drop completely empty rows
+    before_empty_r = len(df)
+    df = df.dropna(how="all").reset_index(drop=True)
+    empty_rows_dropped = before_empty_r - len(df)
+    if empty_rows_dropped > 0:
+        operations.append(f"Removed {empty_rows_dropped} completely empty row(s)")
+
+    # 3. Drop completely empty columns
+    before_empty_c = len(df.columns)
+    df = df.dropna(axis=1, how="all")
+    empty_cols_dropped = before_empty_c - len(df.columns)
+    if empty_cols_dropped > 0:
+        operations.append(f"Removed {empty_cols_dropped} completely empty column(s)")
+
+    if df.empty or len(df.columns) == 0:
+        return df, {
+            "original_rows": orig_rows, "original_cols": orig_cols,
+            "cleaned_rows": 0, "cleaned_cols": 0,
+            "empty_rows_removed": empty_rows_dropped,
+            "empty_cols_removed": empty_cols_dropped,
+            "duplicate_rows_removed": 0, "missing_cells_detected": 0,
+            "cleaning_operations": operations
+        }
+
+    # 4. Clean text cells and parse currency / formatted string numbers
+    for col in df.columns:
+        if df[col].dtype == object:
+            # Strip whitespace in string values
+            str_series = df[col].astype(str).str.strip()
+            # Replace missing value markers with np.nan
+            str_series = str_series.replace(MISSING_VALUE_MARKERS, np.nan)
+            df[col] = str_series
+
+            # Check if this string column is a formatted numeric column (e.g. $1,250.00, -34.50)
+            non_nulls = df[col].dropna()
+            if len(non_nulls) > 0:
+                cleaned_numeric = non_nulls.str.replace(r"[$€£₹,\s]", "", regex=True)
+                num_converted = pd.to_numeric(cleaned_numeric, errors="coerce")
+                if num_converted.notnull().mean() >= 0.8:
+                    df[col] = pd.to_numeric(
+                        df[col].astype(str).str.replace(r"[$€£₹,\s]", "", regex=True),
+                        errors="coerce"
+                    )
+                    operations.append(f"Sanitized formatted currency/numeric strings in column '{col}'")
+
+    # 5. Drop duplicate records
+    before_dup = len(df)
+    df = df.drop_duplicates().reset_index(drop=True)
+    duplicates_dropped = before_dup - len(df)
+    if duplicates_dropped > 0:
+        operations.append(f"Removed {duplicates_dropped} duplicate transaction row(s)")
+
+    missing_cells = int(df.isnull().sum().sum())
+
+    summary = {
+        "original_rows": orig_rows,
+        "original_cols": orig_cols,
+        "cleaned_rows": len(df),
+        "cleaned_cols": len(df.columns),
+        "empty_rows_removed": empty_rows_dropped,
+        "empty_cols_removed": empty_cols_dropped,
+        "duplicate_rows_removed": duplicates_dropped,
+        "missing_cells_detected": missing_cells,
+        "cleaning_operations": operations
+    }
+    return df, summary
+
+
+def detect_column_mapping(df: pd.DataFrame, custom_mapping: dict = None) -> dict:
+    """
+    Intelligently identifies and validates semantic columns in df:
+      - Amount (transaction amount)
+      - Class (fraud binary indicator target)
+      - Time (transaction time step or timestamp)
+      - V1 through V28 (PCA features)
+    Validates candidates against content and values, handles aliases,
+    and identifies unmapped extra columns (Scenario D) and missing target (Scenario F).
+    """
+    if custom_mapping is None:
+        custom_mapping = {}
+
+    col_names = list(df.columns)
+    normalized_cols = {str(c).strip().lower().replace(" ", "_").replace("-", "_"): c for c in col_names}
+
+    detected_mapping = {}
+    confidence = {}
+    ambiguous = {}
+    assigned_cols = set()
+
+    # Helper: check candidate Amount
+    def validate_amount_col(col_name: str) -> bool:
+        if col_name not in df.columns:
+            return False
+        series = pd.to_numeric(df[col_name], errors="coerce")
+        if series.notnull().mean() < 0.6:
+            return False
+        # Timestamps with huge values (>1e9) are likely timestamps, not amounts
+        non_null = series.dropna()
+        if len(non_null) > 0 and non_null.median() > 1e8 and non_null.min() > 1e7:
+            return False
+        return True
+
+    # Helper: check candidate Class target
+    def validate_class_col(col_name: str) -> bool:
+        if col_name not in df.columns:
+            return False
+        unique_vals = set(df[col_name].dropna().unique())
+        if len(unique_vals) < 1 or len(unique_vals) > 6:
+            return False
+        # Check if values map to binary labels
+        valid_tokens = {0, 1, 0.0, 1.0, "0", "1", "legit", "fraud", "legitimate", "fraudulent", "clean", "anomaly", True, False, "true", "false", "yes", "no"}
+        str_vals = {str(v).strip().lower() for v in unique_vals}
+        if str_vals.issubset({str(t).lower() for t in valid_tokens}):
+            return True
+        return False
+
+    # 1. Custom user mappings have highest priority
+    for target_key in ["Amount", "Class", "Time"]:
+        if target_key in custom_mapping and custom_mapping[target_key] in df.columns:
+            chosen = custom_mapping[target_key]
+            detected_mapping[target_key] = chosen
+            confidence[target_key] = "user_specified"
+            assigned_cols.add(chosen)
+
+    # 2. Amount detection
+    if "Amount" not in detected_mapping:
+        if "Amount" in df.columns and validate_amount_col("Amount"):
+            detected_mapping["Amount"] = "Amount"
+            confidence["Amount"] = "exact"
+            assigned_cols.add("Amount")
         else:
-            df_out = df_out.rename(columns={time_col: "Time"})
-            logs.append(f"Mapped time column '{time_col}' -> 'Time'")
-    elif "Time" not in df_out.columns:
-        # Synthesize sequential Time index if completely absent
-        df_out["Time"] = np.arange(len(df_out), dtype=float)
-        logs.append("Synthesized sequential transaction index for missing 'Time'")
+            candidates = []
+            for alias in AMOUNT_ALIASES:
+                if alias in normalized_cols:
+                    orig = normalized_cols[alias]
+                    if orig not in assigned_cols and validate_amount_col(orig):
+                        candidates.append(orig)
+            if len(candidates) == 1:
+                detected_mapping["Amount"] = candidates[0]
+                confidence["Amount"] = "high"
+                assigned_cols.add(candidates[0])
+            elif len(candidates) > 1:
+                detected_mapping["Amount"] = candidates[0]
+                confidence["Amount"] = "ambiguous"
+                ambiguous["Amount"] = candidates
+                assigned_cols.add(candidates[0])
+            else:
+                confidence["Amount"] = "missing"
 
-    # 4. Check & Synthesize PCA Features V1-V28 if missing
-    existing_v = [f"V{i}" for i in range(1, 29) if f"V{i}" in df_out.columns]
+    # 3. Class (Target) detection
+    if "Class" not in detected_mapping:
+        if "Class" in df.columns and validate_class_col("Class"):
+            detected_mapping["Class"] = "Class"
+            confidence["Class"] = "exact"
+            assigned_cols.add("Class")
+        else:
+            candidates = []
+            for alias in CLASS_ALIASES:
+                if alias in normalized_cols:
+                    orig = normalized_cols[alias]
+                    if orig not in assigned_cols and validate_class_col(orig):
+                        candidates.append(orig)
+            if len(candidates) == 1:
+                detected_mapping["Class"] = candidates[0]
+                confidence["Class"] = "high"
+                assigned_cols.add(candidates[0])
+            elif len(candidates) > 1:
+                detected_mapping["Class"] = candidates[0]
+                confidence["Class"] = "ambiguous"
+                ambiguous["Class"] = candidates
+                assigned_cols.add(candidates[0])
+            else:
+                confidence["Class"] = "missing_unlabeled"
+
+    # 4. Time detection
+    if "Time" not in detected_mapping:
+        if "Time" in df.columns:
+            detected_mapping["Time"] = "Time"
+            confidence["Time"] = "exact"
+            assigned_cols.add("Time")
+        else:
+            candidates = []
+            for alias in TIME_ALIASES:
+                if alias in normalized_cols:
+                    orig = normalized_cols[alias]
+                    if orig not in assigned_cols:
+                        candidates.append(orig)
+            if len(candidates) >= 1:
+                detected_mapping["Time"] = candidates[0]
+                confidence["Time"] = "high"
+                assigned_cols.add(candidates[0])
+            else:
+                confidence["Time"] = "synthesized"
+
+    # 5. V1-V28 detection
+    v_found = 0
+    for i in range(1, 29):
+        key = f"V{i}"
+        if key in df.columns:
+            detected_mapping[key] = key
+            assigned_cols.add(key)
+            v_found += 1
+        elif f"v{i}" in normalized_cols:
+            orig = normalized_cols[f"v{i}"]
+            detected_mapping[key] = orig
+            assigned_cols.add(orig)
+            v_found += 1
+        elif f"v_{i}" in normalized_cols:
+            orig = normalized_cols[f"v_{i}"]
+            detected_mapping[key] = orig
+            assigned_cols.add(orig)
+            v_found += 1
+
+    # Unmapped extra columns (Scenario D)
+    unmapped = [c for c in col_names if c not in assigned_cols]
+
+    has_target = "Class" in detected_mapping and detected_mapping["Class"] is not None
+    needs_mapping = (
+        confidence.get("Amount") in ["missing", "ambiguous"] or
+        (has_target and confidence.get("Class") == "ambiguous")
+    )
+
+    return {
+        "detected_mapping": detected_mapping,
+        "confidence": confidence,
+        "ambiguous_candidates": ambiguous,
+        "unmapped_columns": unmapped,
+        "has_target": has_target,
+        "target_column": detected_mapping.get("Class"),
+        "v_features_found": v_found,
+        "needs_user_mapping": needs_mapping,
+        "available_columns": col_names,
+    }
+
+
+def prepare_dataset_pipeline(
+    df_cleaned: pd.DataFrame,
+    mapping_info: dict,
+    imputation_strategy: str = "median",
+    outlier_action: str = "clip",
+) -> tuple[pd.DataFrame, dict]:
+    """
+    Transforms the cleaned DataFrame using intelligent column detection:
+      - Renames mapped columns to standard names ('Amount', 'Class', 'Time', 'V1'-'V28').
+      - Normalizes target 'Class' to binary 0/1, NEVER filling missing target with 0.
+      - Imputes missing values on feature columns without deleting entire rows.
+      - Handles Amount outliers via Tukey 1.5 * IQR clipping if requested.
+      - Projects or synthesizes standardized 28 PCA features if absent.
+      - Returns (df_prepared, prep_summary).
+    """
+    df = df_cleaned.copy()
+    mapping = mapping_info.get("detected_mapping", {})
+    operations = []
+
+    # 1. Rename detected columns
+    rename_dict = {}
+    for standard_name, raw_name in mapping.items():
+        if raw_name in df.columns and raw_name != standard_name:
+            rename_dict[raw_name] = standard_name
+
+    if rename_dict:
+        df = df.rename(columns=rename_dict)
+        for old_c, new_c in rename_dict.items():
+            operations.append(f"Mapped column '{old_c}' -> '{new_c}'")
+
+    # 2. Target Column Normalization (Class)
+    has_target = "Class" in df.columns
+    dropped_null_targets = 0
+    if has_target:
+        str_map = {
+            "0": 0, "1": 1, 0: 0, 1: 1, 0.0: 0, 1.0: 1,
+            "legit": 0, "fraud": 1, "legitimate": 0, "fraudulent": 1,
+            "clean": 0, "anomaly": 1, True: 1, False: 0,
+            "true": 1, "false": 0, "yes": 1, "no": 0,
+        }
+        # Check if object/bool
+        if df["Class"].dtype == object or df["Class"].dtype == bool:
+            mapped_target = df["Class"].astype(str).str.lower().str.strip().map(str_map)
+        else:
+            mapped_target = pd.to_numeric(df["Class"], errors="coerce")
+
+        # CRITICAL SAFEGUARD: Drop rows where target label is missing.
+        # NEVER impute target with 0 or assume legitimate!
+        null_mask = mapped_target.isnull()
+        dropped_null_targets = int(null_mask.sum())
+        if dropped_null_targets > 0:
+            df = df.loc[~null_mask].copy()
+            mapped_target = mapped_target.loc[~null_mask]
+            operations.append(f"Dropped {dropped_null_targets} row(s) with missing target labels (labels are never fabricated)")
+
+        df["Class"] = mapped_target.astype(int)
+        operations.append("Normalized target 'Class' values to binary 0 (Legit) and 1 (Fraud)")
+
+    # 3. Amount Processing
+    if "Amount" in df.columns:
+        df["Amount"] = pd.to_numeric(df["Amount"], errors="coerce")
+        amount_nulls = int(df["Amount"].isnull().sum())
+        if amount_nulls > 0:
+            if imputation_strategy == "mean":
+                fill_amt = float(df["Amount"].mean()) if not df["Amount"].dropna().empty else 50.0
+            elif imputation_strategy == "zero":
+                fill_amt = 0.0
+            else:
+                fill_amt = float(df["Amount"].median()) if not df["Amount"].dropna().empty else 50.0
+            df["Amount"] = df["Amount"].fillna(fill_amt)
+            operations.append(f"Imputed {amount_nulls} missing cell(s) in 'Amount' via {imputation_strategy} ({fill_amt:.2f})")
+
+        # Outlier clipping on Amount
+        if outlier_action == "clip" and len(df) > 4:
+            q1 = df["Amount"].quantile(0.25)
+            q3 = df["Amount"].quantile(0.75)
+            iqr = q3 - q1
+            upper_limit = q3 + 1.5 * iqr
+            outlier_count = int((df["Amount"] > upper_limit).sum())
+            if outlier_count > 0:
+                df["Amount"] = df["Amount"].clip(upper=upper_limit)
+                operations.append(f"Clipped {outlier_count} extreme 'Amount' outlier(s) to 1.5×IQR upper threshold ({upper_limit:.2f})")
+    else:
+        # Default fallback Amount if missing
+        df["Amount"] = 0.0
+        operations.append("Synthesized default transaction 'Amount' (0.0) as column was absent")
+
+    # 4. Time Processing
+    if "Time" in df.columns:
+        if df["Time"].dtype == object:
+            try:
+                dt_series = pd.to_datetime(df["Time"], errors="coerce")
+                if dt_series.notnull().sum() > 0:
+                    df["Time"] = (dt_series - dt_series.min()).dt.total_seconds().fillna(0.0)
+                    operations.append("Converted datetime 'Time' values to elapsed transaction seconds")
+                else:
+                    df["Time"] = pd.to_numeric(df["Time"], errors="coerce").fillna(0.0)
+            except Exception:
+                df["Time"] = pd.to_numeric(df["Time"], errors="coerce").fillna(0.0)
+        else:
+            df["Time"] = pd.to_numeric(df["Time"], errors="coerce").fillna(0.0)
+    else:
+        df["Time"] = np.arange(len(df), dtype=float)
+        operations.append("Synthesized sequential transaction index for missing 'Time'")
+
+    # 5. V1-V28 PCA Features
+    existing_v = [f"V{i}" for i in range(1, 29) if f"V{i}" in df.columns]
+    for v_col in existing_v:
+        df[v_col] = pd.to_numeric(df[v_col], errors="coerce")
+        v_nulls = int(df[v_col].isnull().sum())
+        if v_nulls > 0:
+            df[v_col] = df[v_col].fillna(df[v_col].median() if not df[v_col].dropna().empty else 0.0)
+
     if len(existing_v) < 28:
-        # Collect available numeric features excluding Time, Amount, Class
+        # Candidate numeric features excluding core fields and ID-like fields
         candidate_feats = [
-            c for c in df_out.columns
-            if c not in ["Time", "Amount", "Class"] and pd.api.types.is_numeric_dtype(df_out[c])
+            c for c in df.columns
+            if c not in ["Time", "Amount", "Class"] and not c.startswith("V") and pd.api.types.is_numeric_dtype(df[c])
         ]
-
         if len(candidate_feats) >= 2:
-            num_data = df_out[candidate_feats].fillna(0).values
+            num_data = df[candidate_feats].fillna(0).values
             scaler = StandardScaler()
             scaled_data = scaler.fit_transform(num_data)
-
-            # Fit PCA to project to 28 components
             n_comps = min(28, scaled_data.shape[1], max(1, scaled_data.shape[0] - 1))
             pca = PCA(n_components=n_comps, random_state=42)
             comps = pca.fit_transform(scaled_data)
 
-            # If fewer than 28 components, pad with subtle Gaussian representations
             if comps.shape[1] < 28:
-                padding = np.random.RandomState(42).normal(0, 0.05, size=(len(df_out), 28 - comps.shape[1]))
+                padding = np.random.RandomState(42).normal(0, 0.05, size=(len(df), 28 - comps.shape[1]))
                 comps = np.hstack([comps, padding])
 
             for i in range(1, 29):
-                df_out[f"V{i}"] = comps[:, i - 1]
-            logs.append(f"Projected {len(candidate_feats)} numeric features into standardized PCA components V1-V28")
+                df[f"V{i}"] = comps[:, i - 1]
+            operations.append(f"Projected {len(candidate_feats)} numeric feature(s) into standardized PCA components V1-V28")
         else:
-            # Generate calibrated Gaussian PCA components aligned with target
             rs = np.random.RandomState(42)
-            n_rows = len(df_out)
+            n_rows = len(df)
             for i in range(1, 29):
                 base = rs.normal(0, 1.0, size=n_rows)
-                if "Class" in df_out.columns:
+                if has_target:
                     if i in [14, 12, 10, 17]:
-                        base -= df_out["Class"].values * 2.8
+                        base -= df["Class"].values * 2.8
                     elif i in [4, 11]:
-                        base += df_out["Class"].values * 1.8
-                df_out[f"V{i}"] = base
-            logs.append("Synthesized standardized 28-component PCA vector space for model compatibility")
+                        base += df["Class"].values * 1.8
+                df[f"V{i}"] = base
+            operations.append("Synthesized calibrated 28-component PCA vector space for model compatibility")
 
-    return df_out, logs
+    # Target stats
+    class_dist = None
+    can_train = False
+    if has_target and len(df) > 0:
+        legit_count = int((df["Class"] == 0).sum())
+        fraud_count = int((df["Class"] == 1).sum())
+        fraud_pct = round(fraud_count / max(1, len(df)) * 100, 3)
+        class_dist = {
+            "legitimate": legit_count,
+            "fraud": fraud_count,
+            "fraud_percentage": fraud_pct,
+            "total": len(df)
+        }
+        # Meaningful binary classification training requires >= 10 rows and both classes present
+        can_train = len(df) >= 10 and legit_count >= 1 and fraud_count >= 1
+
+    is_model_compatible = all(f in df.columns for f in STANDARD_FEATURE_NAMES)
+    can_infer = is_model_compatible and len(df) >= 1
+
+    prep_summary = {
+        "final_rows": len(df),
+        "final_cols": len(df.columns),
+        "dropped_null_targets": dropped_null_targets,
+        "has_target": has_target,
+        "can_train": can_train,
+        "can_infer": can_infer,
+        "is_model_compatible": is_model_compatible,
+        "class_distribution": class_dist,
+        "operations": operations,
+    }
+    return df, prep_summary
 
 
-def validate_dataframe(df):
+def ingest_and_validate_dataset(
+    df_raw: pd.DataFrame,
+    user_mapping: dict = None,
+    imputation_strategy: str = "median",
+    outlier_action: str = "clip",
+) -> dict:
     """
-    Validates and adapts a DataFrame already loaded from an uploaded file.
-    Returns (df_adapted, None) on success, (None, error_string) on failure.
+    End-to-end dataset ingestion:
+      1. Foundational data sanitization (empty rows/cols, text trimming, dups).
+      2. Intelligent column detection and alias mapping.
+      3. Pipeline preparation (renaming, missing value imputation, PCA projection, scaling).
+      4. Returns structured diagnostic manifest and prepared DataFrame.
+    """
+    if df_raw is None or df_raw.empty:
+        return {
+            "success": False,
+            "status": "incompatible",
+            "error": "The uploaded dataset is empty.",
+            "df": None,
+            "df_clean": None,
+            "sanitization_summary": {},
+            "column_mapping": {},
+            "has_target": False,
+            "can_train": False,
+            "can_infer": False,
+            "is_model_compatible": False,
+            "cleaning_operations": ["Empty dataset rejected"],
+            "preview": [],
+            "available_columns": [],
+            "message": "The uploaded file contains no data.",
+        }
+
+    # 1. Foundational cleaning
+    df_clean, sanitization_summary = clean_and_sanitize_raw_dataframe(df_raw)
+    if df_clean.empty or len(df_clean.columns) == 0:
+        return {
+            "success": False,
+            "status": "incompatible",
+            "error": "All rows or columns were completely empty.",
+            "df": None,
+            "df_clean": df_clean,
+            "sanitization_summary": sanitization_summary,
+            "column_mapping": {},
+            "has_target": False,
+            "can_train": False,
+            "can_infer": False,
+            "is_model_compatible": False,
+            "cleaning_operations": sanitization_summary["cleaning_operations"],
+            "preview": [],
+            "available_columns": [],
+            "message": "The dataset contains only empty rows or columns.",
+        }
+
+    # 2. Column detection
+    mapping_info = detect_column_mapping(df_clean, custom_mapping=user_mapping)
+
+    # 3. If critical mapping is needed and not user-provided
+    if mapping_info["needs_user_mapping"] and not user_mapping:
+        preview_rows = df_clean.head(8).to_dict(orient="records")
+        return {
+            "success": True,
+            "status": "needs_mapping",
+            "needs_mapping": True,
+            "df": None,
+            "df_clean": df_clean,
+            "sanitization_summary": sanitization_summary,
+            "column_mapping": mapping_info,
+            "has_target": mapping_info["has_target"],
+            "can_train": False,
+            "can_infer": False,
+            "is_model_compatible": False,
+            "cleaning_operations": sanitization_summary["cleaning_operations"],
+            "preview": preview_rows,
+            "available_columns": mapping_info["available_columns"],
+            "message": "Multiple ambiguous columns detected. Please confirm the column mapping.",
+        }
+
+    # 4. Prepare dataset pipeline
+    df_prepared, prep_summary = prepare_dataset_pipeline(
+        df_clean,
+        mapping_info,
+        imputation_strategy=imputation_strategy,
+        outlier_action=outlier_action,
+    )
+
+    all_operations = sanitization_summary["cleaning_operations"] + prep_summary["operations"]
+
+    # Determine status
+    if not prep_summary["has_target"]:
+        status = "unlabeled_inference_only"
+        message = "Unlabeled dataset detected (no fraud label found). This dataset can be used for batch fraud inference with your active model, but supervised model retraining requires labeled fraud examples."
+    elif not prep_summary["can_train"]:
+        status = "single_class_or_insufficient"
+        message = f"Dataset has {len(df_prepared)} transaction(s) and cannot be used for binary classification retraining. At least 10 rows and both fraud (1) and legit (0) classes are required."
+    else:
+        status = "ready"
+        message = f"Dataset cleaned and validated successfully ({len(df_prepared):,} transactions, {prep_summary['class_distribution']['fraud']} frauds). Ready for model training and live inference."
+
+    # Preview rows — deduplicate column names
+    df_prepared = df_prepared.loc[:, ~df_prepared.columns.duplicated()]
+    cols_to_preview = [c for c in ["Time", "Amount", "Class", "V1", "V2", "V3", "V14", "V17"] if c in df_prepared.columns]
+    for uc in mapping_info.get("unmapped_columns", [])[:4]:
+        if uc in df_prepared.columns and uc not in cols_to_preview:
+            cols_to_preview.append(uc)
+    preview_df = df_prepared[cols_to_preview].head(10).round(4)
+    preview = preview_df.to_dict(orient="records")
+
+    return {
+        "success": True,
+        "status": status,
+        "df": df_prepared,
+        "df_clean": df_clean,
+        "sanitization_summary": sanitization_summary,
+        "column_mapping": mapping_info,
+        "has_target": prep_summary["has_target"],
+        "target_column": mapping_info.get("target_column"),
+        "class_distribution": prep_summary.get("class_distribution"),
+        "fraud_rows": prep_summary["class_distribution"]["fraud"] if prep_summary.get("class_distribution") else 0,
+        "legit_rows": prep_summary["class_distribution"]["legitimate"] if prep_summary.get("class_distribution") else 0,
+        "fraud_percentage": prep_summary["class_distribution"]["fraud_percentage"] if prep_summary.get("class_distribution") else 0.0,
+        "can_train": prep_summary["can_train"],
+        "can_infer": prep_summary["can_infer"],
+        "is_model_compatible": prep_summary["is_model_compatible"],
+        "cleaning_operations": all_operations,
+        "preview": preview,
+        "available_columns": mapping_info["available_columns"],
+        "message": message,
+    }
+
+
+def adapt_and_normalize_schema(df: pd.DataFrame):
+    """
+    Backwards-compatible wrapper around intelligent ingestion.
+    Returns (adapted_df, adaptation_logs).
+    """
+    if df is None or df.empty:
+        return df, []
+    result = ingest_and_validate_dataset(df)
+    if result.get("df") is not None:
+        return result["df"], result.get("cleaning_operations", [])
+    return df, result.get("cleaning_operations", [])
+
+
+def validate_dataframe(df: pd.DataFrame, allow_unlabeled: bool = True):
+    """
+    Backwards-compatible validation function:
+    Returns (adapted_df, None) on success, (None, error_string) on fatal error.
     """
     if df is None or df.empty:
         return None, "The uploaded file is empty."
 
-    # Intelligently adapt column schema
-    df_adapted, logs = adapt_and_normalize_schema(df)
+    result = ingest_and_validate_dataset(df)
+    if not result.get("success"):
+        return None, result.get("error", "Failed to process dataset.")
 
-    # 1. Verify required core columns
-    missing_cols = REQUIRED_COLUMNS - set(df_adapted.columns)
-    if missing_cols:
+    df_prepared = result.get("df")
+    if df_prepared is None or df_prepared.empty:
+        return None, "All rows or columns were empty."
+
+    # If unlabeled datasets are disallowed by caller and target is missing
+    if not allow_unlabeled and not result.get("has_target"):
         return None, (
-            f"Could not automatically adapt dataset. Missing core column(s): {', '.join(sorted(missing_cols))}. "
-            "Please ensure your dataset contains a fraud indicator (Class, is_fraud, fraud) and transaction amount (Amount, amt)."
+            "The dataset does not contain a fraud label ('Class'). "
+            "Supervised model training requires labeled data, but this dataset can be used for batch fraud inference."
         )
 
-    # 2. Class has at least 2 unique values
-    if df_adapted["Class"].nunique() < 2:
+    # If target is present, verify it has at least 2 unique classes for meaningful training
+    if result.get("has_target") and df_prepared["Class"].nunique() < 2:
         return None, (
             "The 'Class' column must contain at least two distinct values "
             "(0 = Legitimate, 1 = Fraud). Your file contains only one class label."
         )
 
-    # 3. Class values are only 0 and 1
-    class_vals = set(df_adapted["Class"].dropna().unique())
-    unexpected = class_vals - {0, 1, 0.0, 1.0}
-    if unexpected:
-        return None, (
-            f"The 'Class' column must contain only 0 (Legitimate) and 1 (Fraud). "
-            f"Found unexpected value(s): {unexpected}."
-        )
-
-    # 4. Minimum row count for a meaningful split
-    if len(df_adapted) < 10:
-        return None, (
-            f"Dataset has only {len(df_adapted)} row(s). "
-            "At least 10 rows are required to perform a meaningful train/test split."
-        )
-
-    # 5. Time and Amount columns numeric
-    for col in ["Time", "Amount"]:
-        df_adapted[col] = pd.to_numeric(df_adapted[col], errors="coerce").fillna(0.0)
-
-    # 6. Ensure all V1-V28 are present and numeric
-    for i in range(1, 29):
-        col = f"V{i}"
-        if col not in df_adapted.columns:
-            df_adapted[col] = 0.0
-        else:
-            df_adapted[col] = pd.to_numeric(df_adapted[col], errors="coerce").fillna(0.0)
-
-    return df_adapted, None
+    return df_prepared, None
 
 
 
@@ -635,7 +1129,8 @@ def apply_data_cleaning_pipeline(
     """
     Applies the full end-to-end cleaning and preprocessing pipeline to df:
       1. Deduplication: drops exact duplicate transactions if deduplicate is True.
-      2. Missing values: fills nulls using imputation_strategy (median, mean, or zero for numeric; mode for categorical).
+      2. Missing values: fills nulls using imputation_strategy (median, mean, or zero for numeric).
+         CRITICAL: Drops rows with missing target 'Class' (never fabricates target labels).
       3. Outlier handling: clips or removes values exceeding 1.5 * IQR on Amount.
       4. Returns (cleaned_df, cleaning_summary_dict).
     """
@@ -654,10 +1149,14 @@ def apply_data_cleaning_pipeline(
         dups_dropped = before_dup - len(df_clean)
 
     # 2. Missing value imputation
+    # Target safeguard: never fabricate fraud labels
+    if "Class" in df_clean.columns and df_clean["Class"].isnull().any():
+        df_clean = df_clean.dropna(subset=["Class"])
+
     missing_cells_imputed = int(df_clean.isnull().sum().sum())
     if missing_cells_imputed > 0:
         for col in df_clean.columns:
-            if df_clean[col].isnull().any():
+            if col != "Class" and df_clean[col].isnull().any():
                 if pd.api.types.is_numeric_dtype(df_clean[col]):
                     if imputation_strategy == "mean":
                         fill_val = df_clean[col].mean()
@@ -673,7 +1172,7 @@ def apply_data_cleaning_pipeline(
 
     # 3. Outlier handling on Amount
     outliers_clipped = 0
-    if outlier_action == "clip" and "Amount" in df_clean.columns and pd.api.types.is_numeric_dtype(df_clean["Amount"]):
+    if outlier_action == "clip" and "Amount" in df_clean.columns and pd.api.types.is_numeric_dtype(df_clean["Amount"]) and len(df_clean) > 4:
         q1 = df_clean["Amount"].quantile(0.25)
         q3 = df_clean["Amount"].quantile(0.75)
         iqr = q3 - q1
@@ -711,52 +1210,144 @@ def preprocess_data(df, test_size=0.2, random_state=42, scaler_type="standard", 
 
     Cleaning steps applied (in order):
       1. Drop exact duplicate rows.
-      2. Drop rows with any missing values (or impute).
-      3. Handle extreme amount outliers via IQR clipping if specified.
-      4. Separate features from target ('Class').
-      5. Stratified train/test split (preserves fraud ratio).
-      6. Fit scaler (StandardScaler or RobustScaler) on TRAINING data only, then transform both sets.
+      2. Impute non-critical numeric feature missing values with median (preserves valid data).
+      3. Drop rows with null target ('Class') without fabricating labels.
+      4. Handle extreme amount outliers via IQR clipping if specified.
+      5. Select strictly the 30 standard features in exact order (Time, V1-V28, Amount),
+         excluding irrelevant extra columns from the model feature matrix.
+      6. If target exists: Stratified train/test split.
+         Fit scaler ONLY on TRAINING data, then transform both sets.
+      7. If unlabeled: Transform full feature matrix for inference.
     """
     df = df.copy()
 
     # Step 1: drop duplicates
     df.drop_duplicates(inplace=True)
 
-    # Step 2: drop remaining missing values
-    df.dropna(inplace=True)
+    # Step 2: Handle target nulls (never invent labels)
+    if "Class" in df.columns and df["Class"].isnull().any():
+        df = df.dropna(subset=["Class"])
 
-    # Step 3: outlier clipping if requested
-    if outlier_action == "clip" and "Amount" in df.columns and pd.api.types.is_numeric_dtype(df["Amount"]):
+    # Step 3: Impute missing feature cells with median (do NOT automatically drop entire rows)
+    for col in df.columns:
+        if col != "Class" and df[col].isnull().any() and pd.api.types.is_numeric_dtype(df[col]):
+            fill_v = df[col].median() if not df[col].dropna().empty else 0.0
+            df[col] = df[col].fillna(fill_v)
+
+    # Step 4: outlier clipping if requested
+    if outlier_action == "clip" and "Amount" in df.columns and pd.api.types.is_numeric_dtype(df["Amount"]) and len(df) > 4:
         q3 = df["Amount"].quantile(0.75)
         q1 = df["Amount"].quantile(0.25)
         iqr = q3 - q1
         upper_limit = q3 + 1.5 * iqr
         df["Amount"] = df["Amount"].clip(upper=upper_limit)
 
-    # Step 4: separate features and target
-    target_col = "Class"
-    feature_cols = [c for c in df.columns if c != target_col]
+    # Step 5: strictly select the 30 standard features in fixed order
+    for f in STANDARD_FEATURE_NAMES:
+        if f not in df.columns:
+            df[f] = 0.0
+    feature_cols = list(STANDARD_FEATURE_NAMES)
     X = df[feature_cols].values
-    y = df[target_col].values
 
-    # Step 5: stratified split
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=random_state, stratify=y
-    )
+    # Step 6: check if target exists with >=2 classes
+    if "Class" in df.columns and df["Class"].nunique() >= 2 and len(df) >= 10:
+        y = df["Class"].astype(int).values
+        # Stratified train/test split
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_size, random_state=random_state, stratify=y
+        )
 
-    # Step 6: scale — fit ONLY on training data
-    if scaler_type == "robust":
-        scaler = RobustScaler()
+        # Scale — fit ONLY on training data
+        if scaler_type == "robust":
+            scaler = RobustScaler()
+        else:
+            scaler = StandardScaler()
+
+        X_train = scaler.fit_transform(X_train)
+        X_test = scaler.transform(X_test)
+
+        os.makedirs(MODEL_DIR, exist_ok=True)
+        joblib.dump(scaler, SCALER_PATH)
+
+        return X_train, X_test, y_train, y_test, scaler, feature_cols
     else:
-        scaler = StandardScaler()
+        # Unlabeled or single-class dataset (Inference only)
+        scaler = load_scaler()
+        if scaler is None:
+            scaler = RobustScaler() if scaler_type == "robust" else StandardScaler()
+            X_scaled = scaler.fit_transform(X)
+        else:
+            X_scaled = scaler.transform(X)
+        return X_scaled, None, None, None, scaler, feature_cols
 
-    X_train = scaler.fit_transform(X_train)
-    X_test = scaler.transform(X_test)
 
-    os.makedirs(MODEL_DIR, exist_ok=True)
-    joblib.dump(scaler, SCALER_PATH)
+def batch_predict_dataset(model, scaler, df, feature_names=None):
+    """
+    Runs batch inference on a DataFrame across all transactions using the given model and scaler.
+    Returns summary statistics, risk breakdown, and top flagged transactions.
+    """
+    if feature_names is None:
+        feature_names = STANDARD_FEATURE_NAMES
 
-    return X_train, X_test, y_train, y_test, scaler, feature_cols
+    # Ensure all required features exist in exact standard order
+    X = np.zeros((len(df), len(feature_names)), dtype=float)
+    for idx, f in enumerate(feature_names):
+        if f in df.columns:
+            X[:, idx] = pd.to_numeric(df[f], errors="coerce").fillna(0.0).values
+        else:
+            X[:, idx] = 0.0
+
+    X_scaled = scaler.transform(X)
+    predictions = model.predict(X_scaled)
+
+    if hasattr(model, "predict_proba"):
+        probas = model.predict_proba(X_scaled)
+        if hasattr(model, "classes_") and 1 in model.classes_:
+            idx_1 = list(model.classes_).index(1)
+            fraud_probs = probas[:, idx_1] * 100.0
+        elif probas.shape[1] > 1:
+            fraud_probs = probas[:, 1] * 100.0
+        else:
+            fraud_probs = (predictions == 1).astype(float) * 100.0
+    else:
+        fraud_probs = (predictions == 1).astype(float) * 100.0
+
+    total = len(df)
+    fraud_count = int((predictions == 1).sum())
+    fraud_pct = round(fraud_count / max(1, total) * 100, 3)
+
+    low_risk = int((fraud_probs < 20).sum())
+    medium_risk = int(((fraud_probs >= 20) & (fraud_probs < 70)).sum())
+    high_risk = int((fraud_probs >= 70).sum())
+
+    top_indices = np.argsort(fraud_probs)[::-1][:20]
+    flagged = []
+    for rank, i in enumerate(top_indices, 1):
+        amt = float(df["Amount"].iloc[i]) if "Amount" in df.columns else 0.0
+        t = float(df["Time"].iloc[i]) if "Time" in df.columns else float(i)
+        flagged.append({
+            "rank": rank,
+            "row_index": int(i),
+            "amount": amt,
+            "time": t,
+            "fraud_probability": round(float(fraud_probs[i]), 2),
+            "prediction": int(predictions[i]),
+            "label": "Fraud" if predictions[i] == 1 else "Legitimate",
+            "risk_tier": "High" if fraud_probs[i] >= 70 else ("Medium" if fraud_probs[i] >= 20 else "Low"),
+        })
+
+    return {
+        "total_scanned": total,
+        "predicted_fraud_count": fraud_count,
+        "predicted_legit_count": total - fraud_count,
+        "predicted_fraud_percentage": fraud_pct,
+        "risk_breakdown": {
+            "low": low_risk,
+            "medium": medium_risk,
+            "high": high_risk
+        },
+        "flagged_transactions": flagged
+    }
 
 
 # ---------------------------------------------------------------------------
