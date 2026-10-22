@@ -364,43 +364,185 @@ def train_model_endpoint(req: TrainRequest):
     }
 
 
+class ApplyMappingRequest(BaseModel):
+    mapping: Dict[str, str]
+    imputation_strategy: Optional[str] = "median"
+    outlier_action: Optional[str] = "clip"
+
+
+class BatchPredictRequest(BaseModel):
+    model_name: Optional[str] = "Random Forest"
+
+
 @app.post("/api/dataset/upload")
 async def upload_dataset_endpoint(file: UploadFile = File(...)):
-    """Upload custom CSV, validate, preprocess, and make ready for training."""
+    """Upload custom CSV, validate, preprocess, and make ready for training/inference."""
     try:
         contents = await file.read()
-        df_raw = pd.read_csv(io.BytesIO(contents))
-        df_clean, err = backend.validate_dataframe(df_raw)
-        if err:
-            raise HTTPException(status_code=400, detail=err)
+        df_raw, parse_err = backend.parse_csv_bytes(contents)
+        if parse_err:
+            raise HTTPException(status_code=400, detail=f"Invalid or corrupted CSV file: {parse_err}")
 
-        # Preprocess
-        X_tr, X_te, y_tr, y_te, scl, f_names = backend.preprocess_data(df_clean)
-        STATE["df"] = df_clean
+        ingest_result = backend.ingest_and_validate_dataset(df_raw)
+
+        if ingest_result.get("status") == "incompatible":
+            raise HTTPException(status_code=400, detail=ingest_result.get("message", "Dataset is incompatible."))
+
+        # If user column confirmation is needed
+        if ingest_result.get("needs_mapping"):
+            STATE["staged_raw_df"] = ingest_result["df_clean"]
+            STATE["staged_filename"] = file.filename
+            return {
+                "success": True,
+                "status": "needs_mapping",
+                "filename": file.filename,
+                "needs_mapping": True,
+                "column_mapping": ingest_result["column_mapping"],
+                "sanitization_summary": ingest_result["sanitization_summary"],
+                "available_columns": ingest_result["available_columns"],
+                "message": ingest_result["message"],
+                "preview": ingest_result["preview"],
+            }
+
+        df_prepared = ingest_result["df"]
+        STATE["df"] = df_prepared
+        STATE["staged_raw_df"] = ingest_result["df_clean"]
         STATE["dataset_ready"] = True
         STATE["dataset_filename"] = file.filename
+        STATE["has_target"] = ingest_result["has_target"]
+        STATE["can_train"] = ingest_result["can_train"]
+        STATE["can_infer"] = ingest_result["can_infer"]
+        STATE["feature_names"] = backend.STANDARD_FEATURE_NAMES
+
+        # Preprocess split if can_train (Do NOT silently retrain production models!)
+        if ingest_result["can_train"]:
+            X_tr, X_te, y_tr, y_te, scl, f_names = backend.preprocess_data(df_prepared)
+            STATE["X_train"] = X_tr
+            STATE["X_test"] = X_te
+            STATE["y_train"] = y_tr
+            STATE["y_test"] = y_te
+            STATE["scaler"] = scl
+        else:
+            X_scaled, _, _, _, scl, f_names = backend.preprocess_data(df_prepared)
+            STATE["X_train"] = None
+            STATE["X_test"] = None
+            STATE["y_train"] = None
+            STATE["y_test"] = None
+            STATE["scaler"] = scl
+
+        return {
+            "success": True,
+            "status": ingest_result["status"],
+            "filename": file.filename,
+            "total_rows": len(df_prepared),
+            "total_cols": len(df_prepared.columns),
+            "has_target": ingest_result["has_target"],
+            "can_train": ingest_result["can_train"],
+            "can_infer": ingest_result["can_infer"],
+            "is_model_compatible": ingest_result["is_model_compatible"],
+            "fraud_rows": ingest_result.get("fraud_rows", 0),
+            "legit_rows": ingest_result.get("legit_rows", 0),
+            "fraud_percentage": ingest_result.get("fraud_percentage", 0.0),
+            "class_distribution": ingest_result.get("class_distribution"),
+            "features_count": len(backend.STANDARD_FEATURE_NAMES),
+            "sanitization_summary": ingest_result["sanitization_summary"],
+            "column_mapping": ingest_result["column_mapping"],
+            "cleaning_operations": ingest_result["cleaning_operations"],
+            "preview": ingest_result["preview"],
+            "message": ingest_result["message"],
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not process file: {str(exc)}")
+
+
+@app.post("/api/dataset/apply-mapping")
+def apply_column_mapping_endpoint(req: ApplyMappingRequest):
+    """Apply manual column mapping from user and re-validate."""
+    df_raw = STATE.get("staged_raw_df")
+    if df_raw is None:
+        raise HTTPException(status_code=400, detail="No staged dataset found. Please upload a dataset first.")
+
+    ingest_result = backend.ingest_and_validate_dataset(
+        df_raw,
+        user_mapping=req.mapping,
+        imputation_strategy=req.imputation_strategy or "median",
+        outlier_action=req.outlier_action or "clip",
+    )
+
+    if not ingest_result["success"] or ingest_result.get("df") is None:
+        raise HTTPException(status_code=400, detail=ingest_result.get("message", "Column mapping application failed."))
+
+    df_prepared = ingest_result["df"]
+    STATE["df"] = df_prepared
+    STATE["dataset_ready"] = True
+    STATE["has_target"] = ingest_result["has_target"]
+    STATE["can_train"] = ingest_result["can_train"]
+    STATE["can_infer"] = ingest_result["can_infer"]
+    STATE["feature_names"] = backend.STANDARD_FEATURE_NAMES
+
+    if ingest_result["can_train"]:
+        X_tr, X_te, y_tr, y_te, scl, f_names = backend.preprocess_data(df_prepared)
         STATE["X_train"] = X_tr
         STATE["X_test"] = X_te
         STATE["y_train"] = y_tr
         STATE["y_test"] = y_te
         STATE["scaler"] = scl
-        STATE["feature_names"] = f_names
+    else:
+        X_scaled, _, _, _, scl, f_names = backend.preprocess_data(df_prepared)
+        STATE["X_train"] = None
+        STATE["X_test"] = None
+        STATE["y_train"] = None
+        STATE["y_test"] = None
+        STATE["scaler"] = scl
 
-        # Summary
-        summary = backend.get_dataset_summary(df_clean)
+    return {
+        "success": True,
+        "status": ingest_result["status"],
+        "filename": STATE.get("staged_filename", "custom_dataset.csv"),
+        "total_rows": len(df_prepared),
+        "total_cols": len(df_prepared.columns),
+        "has_target": ingest_result["has_target"],
+        "can_train": ingest_result["can_train"],
+        "can_infer": ingest_result["can_infer"],
+        "is_model_compatible": ingest_result["is_model_compatible"],
+        "fraud_rows": ingest_result.get("fraud_rows", 0),
+        "legit_rows": ingest_result.get("legit_rows", 0),
+        "fraud_percentage": ingest_result.get("fraud_percentage", 0.0),
+        "class_distribution": ingest_result.get("class_distribution"),
+        "features_count": len(backend.STANDARD_FEATURE_NAMES),
+        "sanitization_summary": ingest_result["sanitization_summary"],
+        "column_mapping": ingest_result["column_mapping"],
+        "cleaning_operations": ingest_result["cleaning_operations"],
+        "preview": ingest_result["preview"],
+        "message": ingest_result["message"],
+    }
 
-        return {
-            "success": True,
-            "filename": file.filename,
-            "total_rows": summary["total_transactions"],
-            "fraud_rows": summary["fraud_transactions"],
-            "legit_rows": summary["legitimate_transactions"],
-            "fraud_percentage": summary["fraud_percentage"],
-            "features_count": summary["num_features"],
-            "message": f"Dataset '{file.filename}' uploaded and preprocessed successfully! Ready to train models.",
-        }
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Could not process file: {str(exc)}")
+
+@app.post("/api/dataset/batch-predict")
+def batch_predict_endpoint(req: BatchPredictRequest):
+    """Run batch fraud inference on all transactions in the active dataset."""
+    df = STATE.get("df")
+    if df is None or df.empty:
+        raise HTTPException(status_code=400, detail="No active dataset available for batch inference.")
+
+    model_name = req.model_name or "Random Forest"
+    model = STATE["trained_models"].get(model_name)
+    if model is None:
+        if STATE["trained_models"]:
+            model_name = list(STATE["trained_models"].keys())[0]
+            model = STATE["trained_models"][model_name]
+        else:
+            raise HTTPException(status_code=400, detail="No trained model available.")
+
+    scaler = STATE.get("scaler")
+    if scaler is None:
+        scaler = backend.load_scaler()
+
+    results = backend.batch_predict_dataset(model, scaler, df, STATE.get("feature_names"))
+    results["model_name"] = model_name
+    return {"success": True, **results}
 
 
 @app.post("/api/dataset/load-demo")
@@ -513,14 +655,15 @@ def run_dataset_cleaning(req: CleanDatasetRequest):
     STATE["scaler"] = scl
     STATE["feature_names"] = f_names
 
-    # Retrain active models automatically
-    STATE["eval_results"] = []
-    for name in backend.CLASSIFIER_DEFINITIONS:
-        m = backend.train_model(name, X_tr, y_tr)
-        STATE["trained_models"][name] = m
-        res = backend.evaluate_model(m, X_te, y_te, name)
-        STATE["eval_results"].append(res)
-    STATE["eval_results"].sort(key=lambda r: r["f1"], reverse=True)
+    # Retrain active models automatically if labeled data is available
+    if X_tr is not None and y_tr is not None and len(np.unique(y_tr)) >= 2:
+        STATE["eval_results"] = []
+        for name in backend.CLASSIFIER_DEFINITIONS:
+            m = backend.train_model(name, X_tr, y_tr)
+            STATE["trained_models"][name] = m
+            res = backend.evaluate_model(m, X_te, y_te, name)
+            STATE["eval_results"].append(res)
+        STATE["eval_results"].sort(key=lambda r: r["f1"], reverse=True)
 
     updated_report = backend.get_comprehensive_cleaning_report(cleaned_df, scaler_name=req.scaler_type, outlier_action=req.outlier_action)
 
