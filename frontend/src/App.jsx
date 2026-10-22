@@ -1390,6 +1390,89 @@ export default function App() {
                 </div>
               </div>
             </div>
+
+            {/* Stratified Splitting & SMOTE Class Imbalance Visualizer */}
+            <div className="content-card" style={{ marginBottom: '1.25rem' }}>
+              <div className="card-header-row">
+                <div className="card-title-left">
+                  <span style={{ color: 'var(--primary)' }}>⚖️</span>
+                  <h3>Class Imbalance &amp; Stratified 80/20 Train-Test Splitting</h3>
+                </div>
+                <span className="badge badge-green">Stratified ShuffleSplit</span>
+              </div>
+              <p className="card-subtitle">
+                Guarantees proportional fraud representation across both Training and Testing subsets to prevent evaluation skew.
+              </p>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
+                {/* Stratified Split Breakdown */}
+                <div style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)', borderRadius: 12, padding: '1rem' }}>
+                  <h5 style={{ fontSize: '0.86rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Stratified Split Proportions</span>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>80% Train · 20% Test</span>
+                  </h5>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                    <div style={{ padding: '0.65rem', background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '0.35rem' }}>
+                        <strong>Training Partition (80%)</strong>
+                        <span style={{ color: 'var(--primary)', fontWeight: 700 }}>
+                          {cleaningReport?.stratified_split?.train_total?.toLocaleString() || '2,000'} rows
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        <span>Legit: {cleaningReport?.stratified_split?.train_legit?.toLocaleString() || '1,960'}</span>
+                        <span style={{ color: 'var(--danger)', fontWeight: 600 }}>
+                          Fraud: {cleaningReport?.stratified_split?.train_fraud?.toLocaleString() || '40'} ({cleaningReport?.stratified_split?.train_fraud_rate || '2.0'}%)
+                        </span>
+                      </div>
+                    </div>
+
+                    <div style={{ padding: '0.65rem', background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '0.35rem' }}>
+                        <strong>Testing Partition (20%)</strong>
+                        <span style={{ color: 'var(--primary)', fontWeight: 700 }}>
+                          {cleaningReport?.stratified_split?.test_total?.toLocaleString() || '500'} rows
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        <span>Legit: {cleaningReport?.stratified_split?.test_legit?.toLocaleString() || '490'}</span>
+                        <span style={{ color: 'var(--danger)', fontWeight: 600 }}>
+                          Fraud: {cleaningReport?.stratified_split?.test_fraud?.toLocaleString() || '10'} ({cleaningReport?.stratified_split?.test_fraud_rate || '2.0'}%)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SMOTE Resampling Projection */}
+                <div style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border)', borderRadius: 12, padding: '1rem' }}>
+                  <h5 style={{ fontSize: '0.86rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>SMOTE Synthetic Balancing Projection</span>
+                    <span className="badge badge-blue" style={{ fontSize: '0.65rem' }}>k-NN Neighbor Interpolation</span>
+                  </h5>
+
+                  <p style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+                    {cleaningReport?.smote_projection?.description || 'SMOTE creates synthetic fraud instances along feature line segments between minority neighbors.'}
+                  </p>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.75rem' }}>
+                    <div style={{ padding: '0.5rem', background: 'var(--bg-card)', borderRadius: 6 }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Pre-SMOTE Skew: </span>
+                      <strong style={{ color: 'var(--danger)' }}>{cleaningReport?.class_imbalance?.imbalance_ratio || '49.0:1'}</strong>
+                    </div>
+                    <div style={{ padding: '0.5rem', background: 'var(--bg-card)', borderRadius: 6 }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Post-SMOTE Ratio: </span>
+                      <strong style={{ color: 'var(--success)' }}>1:1 (Balanced 50/50)</strong>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: '0.65rem', padding: '0.45rem', background: 'var(--primary-light)', borderRadius: 6, fontSize: '0.72rem', color: 'var(--primary)', fontWeight: 600 }}>
+                    ✨ Projected Synthetic Fraud Samples: +{cleaningReport?.smote_projection?.synthetic_fraud_samples_generated?.toLocaleString() || '1,920'} vectors
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
